@@ -1,0 +1,101 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  url         String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  measurements PerformanceMeasurement[]
+
+  @@map("products")
+}
+
+model PerformanceMeasurement {
+  id              String      @id @default(cuid())
+  productId       String
+  deviceType      DeviceType
+  measurementDate DateTime    @default(now())
+  
+  // Core Web Vitals
+  performanceScore Float
+  fcp             Float?      // First Contentful Paint (ms)
+  lcp             Float?      // Largest Contentful Paint (ms)
+  cls             Float?      // Cumulative Layout Shift
+  fid             Float?      // First Input Delay (ms)
+  ttfb            Float?      // Time to First Byte (ms)
+  
+  // Additional metrics
+  speedIndex      Float?
+  tbt             Float?      // Total Blocking Time (ms)
+  
+  // PageSpeed Insights specific data
+  opportunity     Json?       // Performance opportunities
+  diagnostics     Json?       // Diagnostic information
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, deviceType, measurementDate])
+  @@index([measurementDate])
+  @@map("performance_measurements")
+}
+
+model MeasurementJob {
+  id          String    @id @default(cuid())
+  productId   String
+  deviceType  DeviceType
+  status      JobStatus @default(PENDING)
+  scheduledAt DateTime
+  startedAt   DateTime?
+  completedAt DateTime?
+  errorMessage String?
+  retryCount  Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
+  @@map("measurement_jobs")
+}
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+enum DeviceType {
+  DESKTOP
+  MOBILE
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
