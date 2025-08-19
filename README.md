@@ -16,7 +16,7 @@ Automated performance monitoring system for Shopify theme products using Google 
 ## Tech Stack
 
 - **Framework**: Next.js 15 with App Router and TypeScript
-- **Database**: PostgreSQL with Prisma ORM
+- **Database**: SQLite (development) / PostgreSQL (production) with Prisma ORM
 - **UI**: TailwindCSS + shadcn/ui components
 - **Charts**: Recharts for data visualization
 - **API**: Google PageSpeed Insights API integration
@@ -38,7 +38,10 @@ Create a `.env` file with the following variables:
 
 ```env
 # Database Configuration
-DATABASE_URL="postgresql://username:password@localhost:5432/shopify_performance"
+# For development (SQLite)
+DATABASE_URL="file:./prisma/dev.db"
+# For production (PostgreSQL)
+# DATABASE_URL="postgresql://username:password@localhost:5432/shopify_performance"
 
 # Google PageSpeed Insights API Key
 # Get your API key from: https://developers.google.com/speed/docs/insights/v5/get-started
@@ -57,6 +60,9 @@ npx prisma db push
 
 # Generate Prisma client
 npx prisma generate
+
+# Seed database with products from config/products.json
+npx ts-node --compiler-options '{"module":"CommonJS"}' prisma/seed.ts
 
 # (Optional) Open Prisma Studio to view your database
 npx prisma studio
@@ -78,14 +84,14 @@ Edit `config/products.json` to define the Shopify store URLs you want to monitor
 }
 ```
 
-### 5. Sync Products to Database
+After updating the products in the config file, run the seed script again to update your database:
 
 ```bash
-# Import products from config file to database
-curl -X POST http://localhost:3000/api/products -H "Content-Type: application/json" -d '{"action":"sync"}'
+# Re-run seed script to update products in database
+npm run db:seed
 ```
 
-### 6. Run Development Server
+### 5. Run Development Server
 
 ```bash
 npm run dev
@@ -252,7 +258,8 @@ src/
 
 **Database connection errors**
 - Verify DATABASE_URL is correct
-- Ensure PostgreSQL is running
+- For SQLite, ensure the path to the database file is valid
+- For PostgreSQL, ensure the database server is running
 - Check network connectivity
 
 **API key errors**

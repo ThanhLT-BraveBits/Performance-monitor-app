@@ -48,7 +48,7 @@ export function CronManagement() {
       const response = await fetch('/api/cron/measurements', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer your_secure_cron_secret_here`
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'development_cron_secret'}`
         }
       });
 
@@ -74,7 +74,7 @@ export function CronManagement() {
       const response = await fetch('/api/cron/measurements', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer your_secure_cron_secret_here`,
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'development_cron_secret'}`,
           'Content-Type': 'application/json'
         }
       });

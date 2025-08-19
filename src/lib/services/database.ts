@@ -22,8 +22,8 @@ class DatabaseService {
         isFile: process.env.DATABASE_URL?.includes('file:') || false
       });
       
-      // Only initialize Prisma client if we have a proper DATABASE_URL
-      if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('file:')) {
+      // Initialize Prisma client for both PostgreSQL and SQLite
+      if (process.env.DATABASE_URL) {
         console.log('🔌 Initializing Prisma client...');
         this.prisma = new PrismaClient({
           log: ['query', 'error', 'warn'],
@@ -32,9 +32,9 @@ class DatabaseService {
         // Test connection immediately
         this.testConnection();
       } else {
-        console.log('⚠️ No PostgreSQL DATABASE_URL found, using demo mode');
+        console.log('⚠️ No DATABASE_URL found, using demo mode');
         this.isConnected = false;
-        this.connectionError = 'No PostgreSQL DATABASE_URL configured';
+        this.connectionError = 'No DATABASE_URL configured';
         this.prisma = null;
       }
     } catch (error) {
@@ -48,11 +48,11 @@ class DatabaseService {
 
   private async testConnection() {
     try {
-      // Only test connection if we have a proper DATABASE_URL
-      if (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('file:')) {
-        console.log('⚠️ No PostgreSQL DATABASE_URL found, using demo mode');
+      // Only test connection if we have a DATABASE_URL
+      if (!process.env.DATABASE_URL) {
+        console.log('⚠️ No DATABASE_URL found, using demo mode');
         this.isConnected = false;
-        this.connectionError = 'No PostgreSQL DATABASE_URL configured';
+        this.connectionError = 'No DATABASE_URL configured';
         return;
       }
 
