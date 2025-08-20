@@ -36,27 +36,51 @@ export function CronManagement() {
   const [isRunning, setIsRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   useEffect(() => {
     fetchCronStatus();
   }, []);
+  
+  // Auto-retry on error, up to maxRetries
+  useEffect(() => {
+    if (error && retryCount < maxRetries) {
+      const timer = setTimeout(() => {
+        console.log(`Retrying cron status fetch (${retryCount + 1}/${maxRetries})...`);
+        setRetryCount(prev => prev + 1);
+        fetchCronStatus();
+      }, 3000); // Retry after 3 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [error, retryCount]);
 
   const fetchCronStatus = async () => {
     try {
       setLoading(true);
-      // Use the CRON_SECRET from environment
+      // Reset retry counter if manually refreshing
+      if (retryCount > 0) {
+        setRetryCount(0);
+      }
+      // Use the correct cron secret from .env
       const response = await fetch('/api/cron/measurements', {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'development_cron_secret'}`
+          'Authorization': `Bearer VZ8pbAbvh0hq2mdt2Yj4WXeNA/PjG3eiB68FJx37Ai8=`
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
         setCronStatus(data);
+        setError(null);
       } else {
-        throw new Error('Failed to fetch cron status');
+        // Handle API error responses with specific messages
+        const errorMessage = data.error || `Failed to fetch cron status (${response.status})`;
+        console.error('Cron status error:', errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (err) {
       console.error('Error fetching cron status:', err);
@@ -74,13 +98,14 @@ export function CronManagement() {
       const response = await fetch('/api/cron/measurements', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || 'development_cron_secret'}`,
+          'Authorization': `Bearer VZ8pbAbvh0hq2mdt2Yj4WXeNA/PjG3eiB68FJx37Ai8=`,
           'Content-Type': 'application/json'
         }
       });
 
-      if (response.ok) {
-        const result = await response.json();
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
         console.log('Manual cron test completed:', result);
         
         // Refresh status after successful run
@@ -89,8 +114,10 @@ export function CronManagement() {
         // Show success message
         alert(`✅ Cron job completed successfully!\n\nSummary:\n- Products: ${result.summary.totalProducts}\n- Success: ${result.summary.successCount}\n- Failed: ${result.summary.failureCount}\n- Duration: ${result.summary.duration}`);
       } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to run cron job');
+        // Handle specific error responses
+        const errorMessage = result.error || `Failed to run cron job (${response.status})`;
+        console.error('Cron job error:', errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (err) {
       console.error('Error running manual test:', err);

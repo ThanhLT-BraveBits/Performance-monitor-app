@@ -155,6 +155,14 @@ export async function GET(request: NextRequest) {
     // Get database service instance
     const db = getDatabaseService();
     
+    // Check database connection status first
+    const connectionStatus = db.getConnectionStatus();
+    if (!connectionStatus.isConnected) {
+      console.warn('Database not connected:', connectionStatus.error);
+      // For measurements endpoint, we'll continue with demo data instead of failing
+      console.log('Proceeding with demo data mode');
+    }
+    
     const searchParams = request.nextUrl.searchParams;
     const productId = searchParams.get('productId');
     const deviceType = searchParams.get('deviceType') as DeviceType | null;
@@ -191,9 +199,15 @@ export async function GET(request: NextRequest) {
 
     const measurements = await db.getMeasurements(options);
 
+    // Ensure product data is included in the response
+    const measurementsWithProduct = measurements.map(m => ({
+      ...m,
+      product: m.product || null
+    }));
+    
     return NextResponse.json({
       success: true,
-      data: measurements,
+      data: measurementsWithProduct,
       total: measurements.length
     });
 

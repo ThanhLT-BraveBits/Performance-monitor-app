@@ -165,6 +165,16 @@ export async function GET(request: NextRequest) {
 
     const databaseService = getDatabaseService();
     
+    // Check database connection status first
+    const connectionStatus = databaseService.getConnectionStatus();
+    if (!connectionStatus.isConnected) {
+      return NextResponse.json({
+        success: false,
+        error: `Database connection issue: ${connectionStatus.error || 'Unknown error'}`,
+        status: 'Database not connected'
+      }, { status: 500 });
+    }
+    
     // Get last run information
     const lastRun = await databaseService.getConfig('last_cron_run');
     const lastResults = await databaseService.getConfig('last_cron_results');

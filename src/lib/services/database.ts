@@ -226,6 +226,15 @@ class DatabaseService {
       return demoMeasurement;
     }
     
+    // First verify that the product exists to prevent foreign key constraint violation
+    const product = await this.prisma.product.findUnique({
+      where: { id: data.productId }
+    });
+    
+    if (!product) {
+      throw new Error(`Product with ID ${data.productId} not found. Cannot create measurement for non-existent product.`);
+    }
+    
     const measurementData = {
       ...data,
       measurementDate: data.measurementDate || new Date()
@@ -404,23 +413,40 @@ class DatabaseService {
 
   // Configuration methods
   async getConfig(key: string): Promise<string | null> {
-    this.throwIfNotConnected();
+    // Check if database is connected before attempting to access it
+    if (!this.isConnected || !this.prisma) {
+      console.log('⚠️ Database not connected, returning null for config:', key);
+      return null;
+    }
     
-    const config = await this.prisma.systemConfig.findUnique({
-      where: { key }
-    });
-    return config?.value || null;
+    try {
+      const config = await this.prisma.systemConfig.findUnique({
+        where: { key }
+      });
+      return config?.value || null;
+    } catch (error) {
+      console.error('Error getting config:', error);
+      return null;
+    }
   }
 
   async setConfig(key: string, value: string): Promise<void> {
-    this.throwIfNotConnected();
+    // Check if database is connected before attempting to access it
+    if (!this.isConnected || !this.prisma) {
+      console.log('⚠️ Database not connected, cannot save config:', key);
+      return;
+    }
     
-    await this.prisma.systemConfig.upsert({
-      where: { key },
-      update: { value },
-      create: { key, value }
-    });
-    console.log('✅ Config saved to database:', key);
+    try {
+      await this.prisma.systemConfig.upsert({
+        where: { key },
+        update: { value },
+        create: { key, value }
+      });
+      console.log('✅ Config saved to database:', key);
+    } catch (error) {
+      console.error('Error saving config:', error);
+    }
   }
   async getMeasurementStats(dateRange?: DateRange) {
     this.throwIfNotConnected();
