@@ -8,48 +8,48 @@ import { t } from '../utils/i18n';
 
 // Helper để tạo error map với i18n
 const createErrorMap = (): z.ZodErrorMap => {
-  return (issue, ctx) => {
+  return (issue) => {
     let message: string;
 
     switch (issue.code) {
       case z.ZodIssueCode.invalid_type:
         if (issue.received === 'undefined' || issue.received === 'null') {
-          message = t('validation:required', { field: ctx.data });
+          message = t('validation:required', { field: issue.path?.join('.') || 'field' });
         } else {
           message = t('validation:invalidType', { 
-            field: ctx.data, 
+            field: issue.path?.join('.') || 'field', 
             expected: issue.expected, 
             received: issue.received 
           });
         }
         break;
       
-      case z.ZodIssueCode.invalid_string:
+      case z.ZodIssueCode.invalid_format:
         if (issue.validation === 'url') {
           message = t('validation:invalidUrl');
         } else if (issue.validation === 'email') {
           message = t('validation:invalidEmail');
         } else {
-          message = t('validation:invalidString', { field: ctx.data });
+          message = t('validation:invalidString', { field: issue.path?.join('.') || 'field' });
         }
         break;
         
       case z.ZodIssueCode.too_small:
         message = t('validation:minLength', { 
-          field: ctx.data, 
+          field: issue.path?.join('.') || 'field', 
           min: issue.minimum 
         });
         break;
         
       case z.ZodIssueCode.too_big:
         message = t('validation:maxLength', { 
-          field: ctx.data, 
+          field: issue.path?.join('.') || 'field', 
           max: issue.maximum 
         });
         break;
         
       default:
-        message = ctx.defaultError;
+        message = 'Invalid input';
     }
 
     return { message };
@@ -109,10 +109,10 @@ export function validateRequest<T>(data: unknown, schema: z.ZodType<T>) {
 
 /**
  * Trích xuất error messages từ kết quả validation
- * @param result - Kết quả validation thất bại
+ * @param error - ZodError object
  * @returns Object chứa các error messages
  */
-export function extractValidationErrors(result: z.SafeParseError<any>) {
-  return result.error.format();
+export function extractValidationErrors(error: z.ZodError) {
+  return error.format();
 }
 

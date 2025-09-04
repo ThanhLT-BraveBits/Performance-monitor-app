@@ -111,7 +111,7 @@ i18next.init({
  * @returns Chuỗi đã được dịch
  */
 export function t(key: string, options?: any): string {
-  return i18next.t(key, options);
+  return i18next.t(key, options) as string;
 }
 
 /**
@@ -120,7 +120,7 @@ export function t(key: string, options?: any): string {
  * @returns Promise resolved khi hoàn tất chuyển đổi
  */
 export function changeLanguage(language: SupportedLanguage): Promise<typeof i18next> {
-  return i18next.changeLanguage(language);
+  return i18next.changeLanguage(language).then(() => i18next);
 }
 
 /**

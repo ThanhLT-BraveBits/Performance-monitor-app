@@ -25,7 +25,7 @@ export async function validateBody<T>(
         {
           success: false,
           error: 'Validation failed',
-          details: extractValidationErrors(result)
+          details: extractValidationErrors(result.error)
         },
         { status: 400 }
       );
@@ -78,7 +78,7 @@ export function validateQuery<T>(
         {
           success: false,
           error: 'Invalid query parameters',
-          details: extractValidationErrors(result)
+          details: extractValidationErrors(result.error)
         },
         { status: 400 }
       );
