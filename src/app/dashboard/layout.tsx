@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { 
   Activity, 
@@ -9,6 +12,29 @@ import {
   Clock,
   Database
 } from 'lucide-react';
+
+// Custom NavLink component that handles active state
+function NavLink({ href, children, className }: { 
+  href: string; 
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const pathname = usePathname();
+  const isActive = pathname === href;
+  
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all ${
+        isActive 
+          ? 'bg-blue-50 text-blue-700 font-medium border-l-4 border-blue-600' 
+          : 'text-muted-foreground hover:text-primary hover:bg-muted'
+      } ${className || ''}`}
+    >
+      {children}
+    </Link>
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -31,48 +57,30 @@ export default function DashboardLayout({
           {/* Navigation */}
           <div className="flex-1 overflow-auto py-2">
             <nav className="grid items-start px-4 text-sm font-medium">
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard"
-              >
+              <NavLink href="/dashboard">
                 <Home className="h-4 w-4" />
                 Dashboard
-              </Link>
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard/charts"
-              >
+              </NavLink>
+              <NavLink href="/dashboard/charts">
                 <BarChart3 className="h-4 w-4" />
                 Analytics
-              </Link>
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard/products"
-              >
+              </NavLink>
+              <NavLink href="/dashboard/products">
                 <Database className="h-4 w-4" />
                 Products
-              </Link>
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard/jobs"
-              >
+              </NavLink>
+              <NavLink href="/dashboard/jobs">
                 <Clock className="h-4 w-4" />
                 Scheduled Jobs
-              </Link>
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard/export"
-              >
+              </NavLink>
+              <NavLink href="/dashboard/export">
                 <Download className="h-4 w-4" />
                 Export Data
-              </Link>
-              <Link
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground transition-all hover:text-primary hover:bg-muted"
-                href="/dashboard/settings"
-              >
+              </NavLink>
+              <NavLink href="/dashboard/settings">
                 <Settings className="h-4 w-4" />
                 Settings
-              </Link>
+              </NavLink>
             </nav>
           </div>
 
@@ -94,12 +102,7 @@ export default function DashboardLayout({
             <h1 className="text-lg font-semibold">Shopify Performance Monitor</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/">
-                <Home className="h-4 w-4 mr-2" />
-                Home
-              </Link>
-            </Button>
+            {/* Removed Home button since we're redirecting from home to dashboard */}
           </div>
         </header>
 

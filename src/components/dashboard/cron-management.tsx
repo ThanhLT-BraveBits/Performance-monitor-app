@@ -36,6 +36,7 @@ export function CronManagement() {
   const [isRunning, setIsRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
 
@@ -80,7 +81,13 @@ export function CronManagement() {
         // Handle API error responses with specific messages
         const errorMessage = data.error || `Failed to fetch cron status (${response.status})`;
         console.error('Cron status error:', errorMessage);
-        throw new Error(errorMessage);
+        
+        // For database connection issues, provide a more helpful message
+        if (errorMessage.includes('Database connection issue')) {
+          setError(`Database connection error: The application is currently running in demo mode. Some features may be limited. ${data.status || ''}`);
+        } else {
+          throw new Error(errorMessage);
+        }
       }
     } catch (err) {
       console.error('Error fetching cron status:', err);
@@ -94,6 +101,7 @@ export function CronManagement() {
     try {
       setIsRunning(true);
       setError(null);
+      setSuccessMessage(null);
       
       const response = await fetch('/api/cron/measurements', {
         method: 'POST',
@@ -106,13 +114,13 @@ export function CronManagement() {
       const result = await response.json();
       
       if (response.ok && result.success) {
-        console.log('Manual cron test completed:', result);
+        console.log('Manual cron test started:', result);
         
         // Refresh status after successful run
         await fetchCronStatus();
         
-        // Show success message
-        alert(`✅ Cron job completed successfully!\n\nSummary:\n- Products: ${result.summary.totalProducts}\n- Success: ${result.summary.successCount}\n- Failed: ${result.summary.failureCount}\n- Duration: ${result.summary.duration}`);
+        // Không sử dụng alert() nữa mà hiển thị thông báo trong UI
+        setSuccessMessage(`Cron job started successfully! Processing ${result.totalProducts || 0} products in the background. The measurements will take several minutes to complete.`);
       } else {
         // Handle specific error responses
         const errorMessage = result.error || `Failed to run cron job (${response.status})`;
@@ -203,6 +211,13 @@ export function CronManagement() {
             <Alert variant="destructive">
               <XCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          
+          {successMessage && (
+            <Alert variant="default" className="bg-green-50 text-green-800 border-green-200">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <AlertDescription>{successMessage}</AlertDescription>
             </Alert>
           )}
 

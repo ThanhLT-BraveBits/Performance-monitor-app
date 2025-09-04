@@ -1,29 +1,63 @@
+/**
+ * Implementation của PerformanceProvider sử dụng Google PageSpeed Insights API
+ */
 import { DeviceType } from '@prisma/client';
-import { PageSpeedInsightsResponse, PerformanceMetrics } from '../types';
+import { PerformanceProvider } from './performance-provider.interface';
+import { PageSpeedInsightsResponse, PerformanceMetrics } from '@/lib/types';
+import { PAGESPEED_CONFIG } from '@/lib/utils/constants';
+import { logger } from '@/lib/utils/logger';
 
-export class PageSpeedService {
+// Logger cho module này
+const pageSpeedLogger = logger.createModuleLogger('GooglePageSpeedProvider');
+
+/**
+ * Provider sử dụng Google PageSpeed Insights API
+ */
+export class GooglePageSpeedProvider implements PerformanceProvider {
+  readonly name = 'Google PageSpeed Insights';
+  
   private apiKey: string;
-  private baseUrl = 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed';
-  private rateLimitDelay = 10000; // 10 seconds between requests (increased further)
-  private maxRetries = 3; // Increased retries with better backoff strategy
-  private lastRequestTime = 0;
+  private baseUrl: string;
+  private rateLimitDelay: number;
+  private maxRetries: number;
+  private lastRequestTime: number;
 
+  /**
+   * Khởi tạo GooglePageSpeedProvider
+   * @param apiKey - API key cho Google PageSpeed Insights (optional, sẽ lấy từ env nếu không cung cấp)
+   */
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.GOOGLE_PAGESPEED_API_KEY || '';
+    this.baseUrl = PAGESPEED_CONFIG.BASE_URL;
+    this.rateLimitDelay = PAGESPEED_CONFIG.RATE_LIMIT_DELAY;
+    this.maxRetries = PAGESPEED_CONFIG.MAX_RETRIES;
+    this.lastRequestTime = 0;
+    
     if (!this.apiKey) {
-      throw new Error('Google PageSpeed Insights API key is required');
+      pageSpeedLogger.warn('Google PageSpeed API key is not provided');
     }
   }
 
   /**
-   * Measure performance for a URL with rate limiting
+   * Kiểm tra xem provider có sẵn sàng để sử dụng không
+   * @returns true nếu API key đã được cấu hình, false nếu không
+   */
+  isAvailable(): boolean {
+    return !!this.apiKey;
+  }
+
+  /**
+   * Đo lường hiệu suất cho một URL
+   * @param url - URL cần đo lường
+   * @param deviceType - Loại thiết bị (desktop/mobile)
+   * @returns Promise với kết quả đo lường
    */
   async measurePerformance(
     url: string, 
     deviceType: DeviceType = DeviceType.DESKTOP
   ): Promise<PerformanceMetrics> {
     // Validate URL first
-    if (!PageSpeedService.isValidUrl(url)) {
+    if (!GooglePageSpeedProvider.isValidUrl(url)) {
       throw new Error(`Invalid URL: ${url}`);
     }
 
@@ -34,7 +68,7 @@ export class PageSpeedService {
     const timeSinceLastRequest = now - this.lastRequestTime;
     if (timeSinceLastRequest < this.rateLimitDelay) {
       const waitTime = this.rateLimitDelay - timeSinceLastRequest;
-      console.log(`⏳ Rate limiting: waiting ${waitTime}ms before next request`);
+      pageSpeedLogger.debug(`Rate limiting: waiting ${waitTime}ms before next request`);
       await this.sleep(waitTime);
     }
     
@@ -42,24 +76,22 @@ export class PageSpeedService {
     while (attempts < this.maxRetries) {
       try {
         this.lastRequestTime = Date.now();
-        console.log(`🔍 Measuring ${url} (${strategy}) - attempt ${attempts + 1}`);
+        pageSpeedLogger.info(`Measuring ${url} (${strategy}) - attempt ${attempts + 1}`);
         
         const response = await this.makeRequest(url, strategy);
         const result = this.transformResponse(response, deviceType);
         
-        console.log(`✅ PageSpeed measurement successful: ${result.performanceScore} score`);
+        pageSpeedLogger.info(`Measurement successful: ${result.performanceScore} score`);
         return result;
         
       } catch (error) {
         attempts++;
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.log(`❌ Attempt ${attempts} failed:`, errorMessage);
+        pageSpeedLogger.warn(`Attempt ${attempts} failed: ${errorMessage}`);
         
         if (attempts >= this.maxRetries) {
           // Check if it's a rate limit error
-          if (errorMessage.includes('Unable to process request') || 
-              errorMessage.includes('rate') || 
-              errorMessage.includes('quota')) {
+          if (GooglePageSpeedProvider.isRateLimitError(error instanceof Error ? error : new Error(errorMessage))) {
             throw new Error(`Google PageSpeed API rate limit reached. Please wait a few minutes before trying again.`);
           }
           throw new Error(`Failed to measure performance after ${this.maxRetries} attempts: ${errorMessage}`);
@@ -72,8 +104,6 @@ export class PageSpeedService {
                            errorMessage.includes('too many requests');
                            
         // Thời gian chờ tăng dần theo số lần thử lại và dài hơn cho lỗi rate limit
-        // Với rate limit: 30s -> 60s -> 120s
-        // Với lỗi khác: 10s -> 20s -> 40s
         const baseDelay = isRateLimit ? 30000 : this.rateLimitDelay;
         const delay = baseDelay * Math.pow(2, attempts);
         
@@ -81,7 +111,7 @@ export class PageSpeedService {
         const jitter = Math.floor(Math.random() * 3000);
         const finalDelay = delay + jitter;
         
-        console.log(`⏳ Waiting ${Math.round(finalDelay/1000)}s before retry ${attempts+1}/${this.maxRetries} (${isRateLimit ? 'rate limit detected' : 'normal retry'})...`);
+        pageSpeedLogger.debug(`Waiting ${Math.round(finalDelay/1000)}s before retry ${attempts+1}/${this.maxRetries} (${isRateLimit ? 'rate limit detected' : 'normal retry'})...`);
         await this.sleep(finalDelay);
       }
     }
@@ -90,14 +120,16 @@ export class PageSpeedService {
   }
 
   /**
-   * Measure performance for both desktop and mobile (with sequential requests to avoid rate limits)
+   * Đo lường hiệu suất cho một URL trên cả desktop và mobile
+   * @param url - URL cần đo lường
+   * @returns Promise với kết quả đo lường cho cả desktop và mobile
    */
   async measureBothDevices(url: string): Promise<{
     desktop: PerformanceMetrics;
     mobile: PerformanceMetrics;
   }> {
     // Sequential requests to avoid rate limiting
-    console.log('📱 Measuring desktop first, then mobile...');
+    pageSpeedLogger.info('Measuring desktop first, then mobile...');
     const desktop = await this.measurePerformance(url, DeviceType.DESKTOP);
     
     // Wait between desktop and mobile measurements
@@ -109,7 +141,22 @@ export class PageSpeedService {
   }
 
   /**
-   * Make API request to Google PageSpeed Insights
+   * Lấy thông tin về quota/giới hạn của provider
+   * @returns Thông tin về quota còn lại và thời gian reset
+   */
+  async getQuotaInfo(): Promise<{
+    remainingQuota?: number;
+    resetTime?: Date;
+  }> {
+    // Google PageSpeed Insights API không cung cấp thông tin về quota
+    return {};
+  }
+
+  /**
+   * Gửi request đến Google PageSpeed Insights API
+   * @param url - URL cần đo lường
+   * @param strategy - Chiến lược đo lường (desktop/mobile)
+   * @returns Response từ API
    */
   private async makeRequest(url: string, strategy: 'desktop' | 'mobile'): Promise<PageSpeedInsightsResponse> {
     const params = new URLSearchParams({
@@ -121,13 +168,13 @@ export class PageSpeedService {
     });
 
     const requestUrl = `${this.baseUrl}?${params.toString()}`;
-    console.log(`🌐 Making PageSpeed API request: ${url} (${strategy})`);
+    pageSpeedLogger.debug(`Making API request: ${url} (${strategy})`);
 
     const response = await fetch(requestUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'Shopify-Performance-Monitor/1.0'
+        'User-Agent': PAGESPEED_CONFIG.USER_AGENT
       }
     });
 
@@ -157,7 +204,10 @@ export class PageSpeedService {
   }
 
   /**
-   * Transform Google PageSpeed response to our performance metrics format
+   * Chuyển đổi response từ API thành PerformanceMetrics
+   * @param response - Response từ API
+   * @param deviceType - Loại thiết bị
+   * @returns PerformanceMetrics
    */
   private transformResponse(
     response: PageSpeedInsightsResponse, 
@@ -180,7 +230,7 @@ export class PageSpeedService {
     const tbt = this.getMetricValue(audits['total-blocking-time']);
 
     // Debug CLS value extraction
-    console.log('🔍 CLS Debug:', {
+    pageSpeedLogger.debug('CLS Debug:', {
       rawValue: audits['cumulative-layout-shift']?.numericValue,
       processedValue: cls,
       auditExists: !!audits['cumulative-layout-shift']
@@ -201,7 +251,9 @@ export class PageSpeedService {
   }
 
   /**
-   * Extract numeric value from PageSpeed audit
+   * Trích xuất giá trị số từ audit
+   * @param audit - Audit từ API
+   * @returns Giá trị số hoặc null nếu không có
    */
   private getMetricValue(audit: any): number | null {
     if (!audit || audit.numericValue === undefined) {
@@ -226,14 +278,18 @@ export class PageSpeedService {
   }
 
   /**
-   * Sleep utility for rate limiting
+   * Utility để sleep một khoảng thời gian
+   * @param ms - Thời gian cần sleep (milliseconds)
+   * @returns Promise
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**
-   * Validate URL before making API request
+   * Kiểm tra xem một URL có hợp lệ không
+   * @param url - URL cần kiểm tra
+   * @returns true nếu URL hợp lệ, false nếu không
    */
   static isValidUrl(url: string): boolean {
     try {
@@ -245,7 +301,9 @@ export class PageSpeedService {
   }
 
   /**
-   * Check if error is rate limit related
+   * Kiểm tra xem một lỗi có phải là lỗi rate limit không
+   * @param error - Error object
+   * @returns true nếu là lỗi rate limit, false nếu không
    */
   static isRateLimitError(error: Error): boolean {
     const message = error.message.toLowerCase();
@@ -255,42 +313,5 @@ export class PageSpeedService {
            message.includes('too many requests') ||
            message.includes('wait a while');
   }
-
-  /**
-   * Get API usage information (if available)
-   */
-  async getApiQuota(): Promise<{
-    remainingQuota?: number;
-    resetTime?: Date;
-  }> {
-    // Note: Google PageSpeed Insights API doesn't provide quota information
-    // This is a placeholder for potential future enhancement
-    return {};
-  }
 }
 
-// Singleton instance with request tracking
-let pageSpeedService: PageSpeedService | null = null;
-let globalLastRequest = 0;
-
-export function getPageSpeedService(): PageSpeedService {
-  if (!pageSpeedService) {
-    pageSpeedService = new PageSpeedService();
-  }
-  return pageSpeedService;
-}
-
-// Export for testing
-export function resetPageSpeedService(): void {
-  pageSpeedService = null;
-  globalLastRequest = 0;
-}
-
-// Global rate limiting across all instances
-export function getTimeSinceLastRequest(): number {
-  return Date.now() - globalLastRequest;
-}
-
-export function updateLastRequestTime(): void {
-  globalLastRequest = Date.now();
-}

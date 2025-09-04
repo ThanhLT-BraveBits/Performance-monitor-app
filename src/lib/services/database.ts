@@ -56,15 +56,55 @@ class DatabaseService {
         return;
       }
 
-      await this.prisma.$connect();
-      console.log('✅ Database connected successfully');
-      this.isConnected = true;
-      this.connectionError = null;
+      // Try connecting to the database
+      try {
+        await this.prisma.$connect();
+        console.log('✅ Database connected successfully');
+        this.isConnected = true;
+        this.connectionError = null;
+        return;
+      } catch (primaryError) {
+        console.error('❌ Primary database connection failed:', primaryError);
+        
+        // If the primary connection fails and it's a SQLite file path, try the alternative path
+        if (process.env.DATABASE_URL?.includes('file:./prisma/dev.db')) {
+          console.log('🔄 Trying alternative database path...');
+          
+          try {
+            // Disconnect the failed client
+            await this.prisma.$disconnect().catch(() => {});
+            
+            // Create a new client with the alternative path
+            this.prisma = new PrismaClient({
+              datasources: {
+                db: {
+                  url: 'file:./prisma/prisma/dev.db'
+                }
+              },
+              log: ['query', 'error', 'warn'],
+            });
+            
+            await this.prisma.$connect();
+            console.log('✅ Connected to alternative database successfully');
+            this.isConnected = true;
+            this.connectionError = null;
+            return;
+          } catch (alternativeError) {
+            console.error('❌ Alternative database connection also failed:', alternativeError);
+            throw alternativeError; // Re-throw to be caught by the outer catch
+          }
+        } else {
+          throw primaryError; // Re-throw to be caught by the outer catch
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
-      console.error('❌ Database connection failed:', errorMessage);
+      console.error('❌ All database connection attempts failed:', errorMessage);
       this.isConnected = false;
       this.connectionError = errorMessage;
+      
+      // Fall back to demo mode
+      console.log('🎭 Falling back to demo mode due to connection failures');
     }
   }
 
@@ -187,16 +227,28 @@ class DatabaseService {
     if (!this.isConnected || !this.prisma) {
       console.log('🎭 Creating demo measurement (database not available)');
       
-      // Get product for demo measurement
-      const product = await this.getProductById(data.productId);
-      if (!product) {
-        throw new Error('Product not found');
+      // Get product for demo measurement - use demo data directly instead of trying to query DB
+      let product;
+      
+      try {
+        // Tìm sản phẩm trong dữ liệu demo
+        const demoProducts = this.getProductionDemoProducts();
+        product = demoProducts.find(p => p.id === data.productId);
+        
+        if (!product) {
+          // Nếu không tìm thấy, sử dụng sản phẩm đầu tiên làm fallback
+          console.warn(`⚠️ Product ID ${data.productId} not found in demo data, using first product as fallback`);
+          product = demoProducts[0];
+        }
+      } catch (error) {
+        console.error('Error finding demo product:', error);
+        throw new Error(`Failed to find product: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
 
       // Create a demo measurement object
       const demoMeasurement: PerformanceMeasurement = {
         id: `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        productId: data.productId,
+        productId: product.id, // Sử dụng ID của sản phẩm đã tìm thấy hoặc fallback
         deviceType: data.deviceType,
         performanceScore: data.performanceScore,
         fcp: data.fcp || null,
@@ -226,35 +278,73 @@ class DatabaseService {
       return demoMeasurement;
     }
     
-    // First verify that the product exists to prevent foreign key constraint violation
-    const product = await this.prisma.product.findUnique({
-      where: { id: data.productId }
-    });
-    
-    if (!product) {
-      throw new Error(`Product with ID ${data.productId} not found. Cannot create measurement for non-existent product.`);
-    }
-    
-    const measurementData = {
-      ...data,
-      measurementDate: data.measurementDate || new Date()
-    };
+    try {
+      // First verify that the product exists to prevent foreign key constraint violation
+      const product = await this.prisma.product.findUnique({
+        where: { id: data.productId }
+      });
+      
+      if (!product) {
+        console.warn(`⚠️ Product with ID ${data.productId} not found in database. Attempting to find by URL...`);
+        
+        // Thử tìm sản phẩm theo URL từ dữ liệu demo
+        const demoProducts = this.getProductionDemoProducts();
+        const matchingProduct = demoProducts.find(p => p.id === data.productId);
+        
+        if (matchingProduct) {
+          // Nếu tìm thấy trong dữ liệu demo, thử tạo sản phẩm trong database
+          console.log(`💡 Found matching product in demo data, creating in database: ${matchingProduct.name}`);
+          
+          try {
+            // Tạo sản phẩm mới trong database dựa trên dữ liệu demo
+            const newProduct = await this.prisma.product.create({
+              data: {
+                name: matchingProduct.name,
+                url: matchingProduct.url,
+                description: matchingProduct.description || '',
+                isActive: matchingProduct.isActive
+              }
+            });
+            
+            console.log(`✅ Created missing product in database: ${newProduct.name} (ID: ${newProduct.id})`);
+            
+            // Cập nhật productId để sử dụng ID mới
+            data.productId = newProduct.id;
+          } catch (createError) {
+            console.error(`❌ Failed to create product in database:`, createError);
+            throw new Error(`Product with ID ${data.productId} not found and failed to create it: ${createError instanceof Error ? createError.message : 'Unknown error'}`);
+          }
+        } else {
+          throw new Error(`Product with ID ${data.productId} not found. Cannot create measurement for non-existent product.`);
+        }
+      }
+      
+      const measurementData = {
+        ...data,
+        measurementDate: data.measurementDate || new Date()
+      };
 
-    const measurement = await this.prisma.performanceMeasurement.create({
-      data: measurementData,
-      include: { product: true }
-    });
-    
-    console.log('✅ Measurement saved to database:', {
-      id: measurement.id,
-      score: data.performanceScore,
-      fcp: data.fcp,
-      lcp: data.lcp,
-      deviceType: data.deviceType,
-      productName: measurement.product?.name
-    });
-    
-    return measurement;
+      const measurement = await this.prisma.performanceMeasurement.create({
+        data: measurementData,
+        include: { product: true }
+      });
+      
+      console.log('✅ Measurement saved to database:', {
+        id: measurement.id,
+        score: data.performanceScore,
+        fcp: data.fcp,
+        lcp: data.lcp,
+        deviceType: data.deviceType,
+        productName: measurement.product?.name
+      });
+      
+      return measurement;
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes('Product with ID'))) {
+        console.error('Error in createMeasurement:', error);
+      }
+      throw error;
+    }
   }
 
   async getMeasurements(options: {
@@ -330,7 +420,7 @@ class DatabaseService {
   }
 
   async disconnect(): Promise<void> {
-    if (this.isConnected) {
+    if (this.isConnected && this.prisma) {
       await this.prisma.$disconnect();
     }
   }
@@ -341,6 +431,36 @@ class DatabaseService {
       isConnected: this.isConnected,
       error: this.connectionError
     };
+  }
+  
+  // Add method to attempt reconnection
+  async reconnect(): Promise<boolean> {
+    console.log('🔄 Attempting database reconnection...');
+    
+    // Disconnect if already connected
+    if (this.prisma) {
+      try {
+        await this.prisma.$disconnect().catch(() => {});
+      } catch (e) {
+        console.log('Warning during disconnect:', e);
+      }
+    }
+    
+    // Reinitialize the client
+    try {
+      console.log('🔌 Reinitializing Prisma client...');
+      this.prisma = new PrismaClient({
+        log: ['query', 'error', 'warn'],
+      });
+      
+      // Test the connection
+      await this.testConnection();
+      
+      return this.isConnected;
+    } catch (error) {
+      console.error('❌ Reconnection failed:', error);
+      return false;
+    }
   }
 
   async updateProduct(id: string, data: any): Promise<Product> {
