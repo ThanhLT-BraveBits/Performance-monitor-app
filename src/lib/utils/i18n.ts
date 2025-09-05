@@ -119,7 +119,7 @@ export function t(key: string, options?: any): string {
  * @param language - Ngôn ngữ cần chuyển đổi
  * @returns Promise resolved khi hoàn tất chuyển đổi
  */
-export function changeLanguage(language: SupportedLanguage): Promise<typeof i18next> {
+export function changeLanguage(language: SupportedLanguage): Promise<any> {
   return i18next.changeLanguage(language);
 }
 
