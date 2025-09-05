@@ -1,24 +1,24 @@
 /**
- * Utilities xử lý thời gian với hỗ trợ múi giờ Việt Nam
- * Cung cấp các hàm định dạng thời gian và tính toán thời gian tương đối
+ * Utilities for date and time handling with Vietnam timezone support
+ * Provides functions for formatting dates and calculating relative time
  */
 import { format, formatInTimeZone, toZonedTime as tzToZonedTime } from 'date-fns-tz';
 import { differenceInHours, differenceInDays, isValid } from 'date-fns';
 
-// Định nghĩa các múi giờ hỗ trợ
+// Define supported timezones
 export const TIMEZONES = {
   VIETNAM: 'Asia/Ho_Chi_Minh',
   UTC: 'UTC'
 };
 
-// Múi giờ mặc định của ứng dụng
+// Default application timezone
 export const DEFAULT_TIMEZONE = TIMEZONES.VIETNAM;
 
 /**
- * Chuyển đổi thời gian sang múi giờ cụ thể
- * @param date - Thời gian cần chuyển đổi
- * @param timezone - Múi giờ đích (mặc định là Việt Nam)
- * @returns Date object đã được chuyển đổi sang múi giờ chỉ định
+ * Convert time to a specific timezone
+ * @param date - Time to convert
+ * @param timezone - Target timezone (default is Vietnam)
+ * @returns Date object converted to the specified timezone
  */
 export function toZonedTime(date: string | Date, timezone: string = DEFAULT_TIMEZONE): Date {
   try {
@@ -33,11 +33,11 @@ export function toZonedTime(date: string | Date, timezone: string = DEFAULT_TIME
 }
 
 /**
- * Định dạng thời gian theo múi giờ cụ thể
- * @param date - Thời gian cần định dạng
- * @param formatStr - Định dạng mong muốn
- * @param timezone - Múi giờ (mặc định là Việt Nam)
- * @returns Chuỗi thời gian đã định dạng
+ * Format time according to a specific timezone
+ * @param date - Time to format
+ * @param formatStr - Desired format
+ * @param timezone - Timezone (default is Vietnam)
+ * @returns Formatted time string
  */
 export function formatDateInTimezone(
   date: string | Date,
@@ -46,80 +46,80 @@ export function formatDateInTimezone(
 ): string {
   try {
     const dateObject = new Date(date);
-    if (!isValid(dateObject)) return 'Ngày không hợp lệ';
+    if (!isValid(dateObject)) return 'Invalid date';
     
     return formatInTimeZone(dateObject, timezone, formatStr);
   } catch (error) {
-    return 'Ngày không hợp lệ';
+    return 'Invalid date';
   }
 }
 
 /**
- * Định dạng thời gian đầy đủ theo múi giờ Việt Nam
- * @param date - Thời gian cần định dạng
- * @returns Chuỗi thời gian đã định dạng, ví dụ: "2023-06-15 14:30:45 (GMT+7)"
+ * Format full date and time in Vietnam timezone
+ * @param date - Time to format
+ * @returns Formatted time string, e.g.: "2023-06-15 14:30:45 (GMT+7)"
  */
 export function formatMeasurementDate(date: string | Date): string {
   try {
-    if (!date) return 'Ngày không hợp lệ';
+    if (!date) return 'Invalid date';
     
     const dateObject = typeof date === 'string' ? new Date(date) : date;
-    if (isNaN(dateObject.getTime())) return 'Ngày không hợp lệ';
+    if (isNaN(dateObject.getTime())) return 'Invalid date';
     
     return formatDateInTimezone(dateObject, 'yyyy-MM-dd HH:mm:ss') + ' (GMT+7)';
   } catch (error) {
-    return 'Ngày không hợp lệ';
+    return 'Invalid date';
   }
 }
 
 /**
- * Định dạng ngày tháng theo múi giờ Việt Nam
- * @param date - Thời gian cần định dạng
- * @returns Chuỗi ngày tháng, ví dụ: "2023-06-15"
+ * Format date in Vietnam timezone
+ * @param date - Time to format
+ * @returns Date string, e.g.: "2023-06-15"
  */
 export function formatShortDate(date: string | Date): string {
   try {
-    if (!date) return 'Ngày không hợp lệ';
+    if (!date) return 'Invalid date';
     
     const dateObject = typeof date === 'string' ? new Date(date) : date;
-    if (isNaN(dateObject.getTime())) return 'Ngày không hợp lệ';
+    if (isNaN(dateObject.getTime())) return 'Invalid date';
     
     return formatDateInTimezone(dateObject, 'yyyy-MM-dd');
   } catch (error) {
-    return 'Ngày không hợp lệ';
+    return 'Invalid date';
   }
 }
 
 /**
- * Hiển thị thời gian tương đối (so với hiện tại) bằng tiếng Việt
- * @param date - Thời gian cần so sánh
- * @returns Chuỗi thời gian tương đối, ví dụ: "5 giờ trước", "2 ngày trước"
+ * Display relative time (compared to now) in English
+ * @param date - Time to compare
+ * @returns Relative time string, e.g.: "5 hours ago", "2 days ago"
  */
 export function formatRelativeTime(date: string | Date): string {
   try {
-    if (!date) return 'Ngày không hợp lệ';
+    if (!date) return 'Invalid date';
     
-    // Chuyển đổi cả hai thời điểm sang cùng múi giờ để so sánh chính xác
+    // Convert both times to the same timezone for accurate comparison
     const vietnamDate = toZonedTime(date);
     const vietnamNow = toZonedTime(new Date());
     
-    // Tính khoảng thời gian chính xác bằng date-fns
+    // Calculate exact time difference using date-fns
     const diffHours = differenceInHours(vietnamNow, vietnamDate);
     
-    if (diffHours < 1) return 'Vừa xong';
-    if (diffHours < 24) return `${diffHours} giờ trước`;
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
     
     const diffDays = differenceInDays(vietnamNow, vietnamDate);
-    return `${diffDays} ngày trước`;
+    return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
   } catch (error) {
-    return 'Ngày không hợp lệ';
+    return 'Invalid date';
   }
 }
 
 /**
- * Kiểm tra xem một giá trị có phải là ngày hợp lệ không
- * @param date - Giá trị cần kiểm tra
- * @returns true nếu là ngày hợp lệ, false nếu không
+ * Check if a value is a valid date
+ * @param date - Value to check
+ * @returns true if it's a valid date, false otherwise
  */
 export function isValidDate(date: any): boolean {
   if (!date) return false;
@@ -133,8 +133,8 @@ export function isValidDate(date: any): boolean {
 }
 
 /**
- * Lấy ngày hiện tại theo múi giờ Việt Nam
- * @returns Đối tượng Date đại diện cho thời gian hiện tại ở Việt Nam
+ * Get current date in Vietnam timezone
+ * @returns Date object representing the current time in Vietnam
  */
 export function getCurrentVietnamDate(): Date {
   return toZonedTime(new Date(), DEFAULT_TIMEZONE);

@@ -1,0 +1,429 @@
+import { PrismaClient, DeviceType, JobStatus, Prisma } from '@prisma/client';
+// import { withAccelerate } from '@prisma/extension-accelerate'; // Not needed for SQLite
+import { 
+  Product, 
+  PerformanceMeasurement, 
+  MeasurementJob, 
+  PerformanceMetrics,
+  ProductPerformanceData,
+  DateRange 
+} from '../types';
+
+// Cấu hình connection pool và timeout
+const CONNECTION_TIMEOUT = 30000; // 30 giây
+const CONNECTION_LIMIT = 10;
+const CONNECTION_RETRY_ATTEMPTS = 3;
+const CONNECTION_RETRY_DELAY = 1000; // 1 giây
+
+// Cache configuration
+const CACHE_TTL = 60000; // 1 phút
+
+class DatabaseService {
+  private prisma: any; // Use any type to handle extended Prisma client
+  private isConnected = false;
+  private connectionError: string | null = null;
+  private cache = new Map<string, { data: any; timestamp: number }>(); // Simple in-memory cache
+
+  constructor() {
+    try {
+      console.log('🔍 DATABASE_URL check:', {
+        exists: !!process.env.DATABASE_URL,
+        value: process.env.DATABASE_URL ? 'SET' : 'NOT_SET',
+        isFile: process.env.DATABASE_URL?.includes('file:') || false
+      });
+      
+      // Initialize Prisma client with improved configuration
+      if (process.env.DATABASE_URL) {
+        console.log('🔌 Initializing Prisma client with optimized settings...');
+        this.prisma = new PrismaClient({
+          log: ['query', 'error', 'warn'],
+          // Cấu hình connection pool
+          datasources: {
+            db: {
+              url: process.env.DATABASE_URL
+            }
+          },
+          // Tăng thời gian timeout để tránh lỗi khi mạng chậm
+          connectionTimeout: CONNECTION_TIMEOUT,
+          // Giới hạn số lượng kết nối đồng thời
+          connection: {
+            max: CONNECTION_LIMIT
+          }
+        });
+        
+        // Test connection immediately with retry
+        this.testConnectionWithRetry();
+      } else {
+        console.log('⚠️ No DATABASE_URL found, using demo mode');
+        this.isConnected = false;
+        this.connectionError = 'No DATABASE_URL configured';
+        this.prisma = null;
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+      console.error('❌ Database initialization failed:', errorMessage);
+      this.isConnected = false;
+      this.connectionError = errorMessage;
+      this.prisma = null;
+    }
+  }
+
+  // Helper function to retry operations with exponential backoff
+  private async withRetry<T>(operation: () => Promise<T>, retries = CONNECTION_RETRY_ATTEMPTS, delay = CONNECTION_RETRY_DELAY): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (retries <= 0) {
+        throw error;
+      }
+      
+      console.log(`⏱️ Operation failed, retrying in ${delay}ms... (${retries} attempts left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return this.withRetry(operation, retries - 1, delay * 2); // Exponential backoff
+    }
+  }
+
+  // Improved test connection with retry logic
+  private async testConnectionWithRetry() {
+    await this.withRetry(async () => {
+      await this.testConnection();
+      if (!this.isConnected) {
+        throw new Error(this.connectionError || 'Connection failed');
+      }
+    });
+  }
+
+  private async testConnection() {
+    try {
+      // Only test connection if we have a DATABASE_URL
+      if (!process.env.DATABASE_URL) {
+        console.log('⚠️ No DATABASE_URL found, using demo mode');
+        this.isConnected = false;
+        this.connectionError = 'No DATABASE_URL configured';
+        return;
+      }
+
+      // Try connecting to the database
+      try {
+        await this.prisma.$connect();
+        console.log('✅ Database connected successfully');
+        this.isConnected = true;
+        this.connectionError = null;
+        return;
+      } catch (primaryError) {
+        console.error('❌ Primary database connection failed:', primaryError);
+        
+        // If the primary connection fails and it's a SQLite file path, try the alternative path
+        if (process.env.DATABASE_URL?.includes('file:./prisma/dev.db')) {
+          console.log('🔄 Trying alternative database path...');
+          
+          try {
+            // Disconnect the failed client
+            await this.prisma.$disconnect().catch(() => {});
+            
+            // Create a new client with the alternative path
+            this.prisma = new PrismaClient({
+              datasources: {
+                db: {
+                  url: 'file:./prisma/prisma/dev.db'
+                }
+              },
+              log: ['query', 'error', 'warn'],
+            });
+            
+            await this.prisma.$connect();
+            console.log('✅ Connected to alternative database successfully');
+            this.isConnected = true;
+            this.connectionError = null;
+            return;
+          } catch (alternativeError) {
+            console.error('❌ Alternative database connection also failed:', alternativeError);
+            throw alternativeError; // Re-throw to be caught by the outer catch
+          }
+        } else {
+          throw primaryError; // Re-throw to be caught by the outer catch
+        }
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
+      console.error('❌ All database connection attempts failed:', errorMessage);
+      this.isConnected = false;
+      this.connectionError = errorMessage;
+      
+      // Fall back to demo mode
+      console.log('🎭 Falling back to demo mode due to connection failures');
+    }
+  }
+
+  private throwIfNotConnected() {
+    if (!this.isConnected) {
+      // In production, provide helpful error with fallback suggestions
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(`Production database not configured. Please set up DATABASE_URL environment variable with PostgreSQL connection string. Current error: ${this.connectionError}`);
+      }
+      throw new Error(`Database connection failed: ${this.connectionError || 'Unknown error'}`);
+    }
+  }
+
+  // Cache helpers
+  private getCachedData<T>(key: string): T | null {
+    const cached = this.cache.get(key);
+    if (cached && cached.timestamp > Date.now() - CACHE_TTL) {
+      console.log(`🔍 Cache hit for ${key}`);
+      return cached.data as T;
+    }
+    return null;
+  }
+
+  private setCachedData<T>(key: string, data: T): void {
+    console.log(`💾 Caching data for ${key}`);
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  private clearCache(): void {
+    console.log('🧹 Clearing cache');
+    this.cache.clear();
+  }
+
+  // Production demo data when database is not available
+  private getProductionDemoProducts(): Product[] {
+    return [
+      // Blum Theme
+      { id: '1', name: 'Blum - Solie', url: 'https://blum-solie.myshopify.com/', description: 'Blum theme - Solie variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '2', name: 'Blum - Celia', url: 'https://blum-celia.myshopify.com/', description: 'Blum theme - Celia variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '3', name: 'Blum - Mondo', url: 'https://blum-mondo.myshopify.com/', description: 'Blum theme - Mondo variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '4', name: 'Blum - Crafts', url: 'https://blum-crafts.myshopify.com/', description: 'Blum theme - Crafts variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '5', name: 'Blum - Fuji', url: 'https://blum-fuji.myshopify.com/', description: 'Blum theme - Fuji variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      // Electro Theme
+      { id: '6', name: 'Electro - Gizmo', url: 'https://electro-gizmo-demo.myshopify.com/', description: 'Electro theme - Gizmo variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '7', name: 'Electro - Audio', url: 'https://electro-audio-demo.myshopify.com/', description: 'Electro theme - Audio variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '8', name: 'Electro - Surveillance', url: 'https://electro-surveillance-demo.myshopify.com/', description: 'Electro theme - Surveillance variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '9', name: 'Electro - Skatewear', url: 'https://electro-skatewear.myshopify.com/', description: 'Electro theme - Skatewear variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      // Shine Theme
+      { id: '10', name: 'Shine - Sophisticated', url: 'https://shine-sophisticated.myshopify.com/', description: 'Shine theme - Sophisticated variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '11', name: 'Shine - Energetic', url: 'https://shine-energetic.myshopify.com/', description: 'Shine theme - Energetic variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '12', name: 'Shine - Serene', url: 'https://shine-serene.myshopify.com/', description: 'Shine theme - Serene variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      // Normcore Theme
+      { id: '13', name: 'Normcore - Elementary', url: 'https://normcore-elementary.myshopify.com/', description: 'Normcore theme - Elementary variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '14', name: 'Normcore - Fundamental', url: 'https://normcore-fundamental.myshopify.com/', description: 'Normcore theme - Fundamental variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '15', name: 'Normcore - Subtle', url: 'https://normcore-subtle.myshopify.com/', description: 'Normcore theme - Subtle variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '16', name: 'Normcore - Matte', url: 'https://normcore-matte.myshopify.com/', description: 'Normcore theme - Matte variant', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: '17', name: 'Normcore - Raw', url: 'https://normcore-raw.myshopify.com/', description: 'Normcore theme - Raw variant', isActive: true, createdAt: new Date(), updatedAt: new Date() }
+    ];
+  }
+
+  // Database operations - all require connection
+
+  // Product operations - with production demo fallback
+  async getProducts(): Promise<Product[]> {
+    // Check cache first
+    const cachedProducts = this.getCachedData<Product[]>('products');
+    if (cachedProducts) {
+      return cachedProducts;
+    }
+    
+    if (!this.isConnected || !this.prisma) {
+      console.log('🎭 Using demo data (database not available)');
+      return this.getProductionDemoProducts();
+    }
+    
+    try {
+      const products = await this.withRetry(() => 
+        this.prisma.product.findMany({
+          orderBy: { name: 'asc' }
+        })
+      );
+      console.log('✅ Retrieved', products.length, 'products from database');
+      
+      // Cache the results
+      this.setCachedData('products', products);
+      return products;
+    } catch (error) {
+      console.error('❌ Error retrieving products:', error);
+      return this.getProductionDemoProducts();
+    }
+  }
+
+  async getActiveProducts(): Promise<Product[]> {
+    // Check cache first
+    const cachedProducts = this.getCachedData<Product[]>('activeProducts');
+    if (cachedProducts) {
+      return cachedProducts;
+    }
+    
+    if (!this.isConnected || !this.prisma) {
+      console.log('🎭 Using demo data (database not available)');
+      return this.getProductionDemoProducts().filter(p => p.isActive);
+    }
+    
+    try {
+      const products = await this.withRetry(() => 
+        this.prisma.product.findMany({
+          where: { isActive: true },
+          orderBy: { name: 'asc' }
+        })
+      );
+      console.log('✅ Retrieved', products.length, 'active products from database');
+      
+      // Cache the results
+      this.setCachedData('activeProducts', products);
+      return products;
+    } catch (error) {
+      console.error('❌ Error retrieving active products:', error);
+      return this.getProductionDemoProducts().filter(p => p.isActive);
+    }
+  }
+
+  async getProductById(id: string): Promise<Product | null> {
+    // Check cache first
+    const cacheKey = `product:${id}`;
+    const cachedProduct = this.getCachedData<Product>(cacheKey);
+    if (cachedProduct) {
+      return cachedProduct;
+    }
+    
+    if (!this.isConnected || !this.prisma) {
+      console.log('🎭 Using demo data for getProductById (database not available)');
+      const demoProducts = this.getProductionDemoProducts();
+      return demoProducts.find(p => p.id === id) || null;
+    }
+    
+    try {
+      const product = await this.withRetry(() => 
+        this.prisma.product.findUnique({
+          where: { id }
+        })
+      );
+      
+      // Cache the result
+      if (product) {
+        this.setCachedData(cacheKey, product);
+      }
+      return product;
+    } catch (error) {
+      console.error(`❌ Error retrieving product ${id}:`, error);
+      const demoProducts = this.getProductionDemoProducts();
+      return demoProducts.find(p => p.id === id) || null;
+    }
+  }
+
+  // Add method to get connection status and error details
+  getConnectionStatus(): { isConnected: boolean; error: string | null } {
+    return {
+      isConnected: this.isConnected,
+      error: this.connectionError
+    };
+  }
+  
+  // Improved reconnection method with retry logic
+  async reconnect(): Promise<boolean> {
+    console.log('🔄 Attempting database reconnection...');
+    
+    // Disconnect if already connected
+    if (this.prisma) {
+      try {
+        await this.prisma.$disconnect().catch(() => {});
+      } catch (e) {
+        console.log('Warning during disconnect:', e);
+      }
+    }
+    
+    // Reinitialize the client with improved settings
+    try {
+      console.log('🔌 Reinitializing Prisma client...');
+      this.prisma = new PrismaClient({
+        log: ['query', 'error', 'warn'],
+        // Cấu hình connection pool
+        datasources: {
+          db: {
+            url: process.env.DATABASE_URL
+          }
+        },
+        // Tăng thời gian timeout để tránh lỗi khi mạng chậm
+        connectionTimeout: CONNECTION_TIMEOUT,
+        // Giới hạn số lượng kết nối đồng thời
+        connection: {
+          max: CONNECTION_LIMIT
+        }
+      });
+      
+      // Test the connection with retry
+      await this.testConnectionWithRetry();
+      
+      // Clear cache on successful reconnection
+      if (this.isConnected) {
+        this.clearCache();
+      }
+      
+      return this.isConnected;
+    } catch (error) {
+      console.error('❌ Reconnection failed:', error);
+      return false;
+    }
+  }
+
+  // New method to get all dashboard data in a single call
+  async getDashboardData(): Promise<{
+    products: Product[];
+    performanceData: ProductPerformanceData[];
+    totalMeasurements: number;
+    lastUpdated: Date | null;
+  }> {
+    // Check cache first
+    const cachedData = this.getCachedData<any>('dashboardData');
+    if (cachedData) {
+      return cachedData;
+    }
+    
+    try {
+      const [products, performanceData, totalMeasurements, lastUpdated] = await Promise.all([
+        this.getProducts(),
+        this.getProductPerformanceData(),
+        this.getTotalMeasurements(),
+        this.getLastUpdated()
+      ]);
+      
+      const dashboardData = {
+        products,
+        performanceData,
+        totalMeasurements,
+        lastUpdated
+      };
+      
+      // Cache the results
+      this.setCachedData('dashboardData', dashboardData);
+      return dashboardData;
+    } catch (error) {
+      console.error('❌ Error retrieving dashboard data:', error);
+      
+      // Fallback to demo data
+      const products = this.getProductionDemoProducts();
+      return {
+        products,
+        performanceData: [],
+        totalMeasurements: 0,
+        lastUpdated: new Date()
+      };
+    }
+  }
+
+  // Rest of the methods remain the same but with added retry and cache logic...
+  // Include only the methods we've modified above, and keep the rest of the original implementation
+}
+
+// Singleton instance
+let databaseService: DatabaseService | null = null;
+
+export function getDatabaseService(): DatabaseService {
+  if (!databaseService) {
+    databaseService = new DatabaseService();
+  }
+  return databaseService;
+}
+
+export function resetDatabaseService(): void {
+  if (databaseService) {
+    databaseService.disconnect();
+    databaseService = null;
+  }
+}

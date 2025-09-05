@@ -1,12 +1,11 @@
 /**
- * Định nghĩa các schema validation cho API requests
- * Sử dụng Zod để đảm bảo tính toàn vẹn dữ liệu và cung cấp error messages rõ ràng
+ * Schema validation definitions for API requests
+ * Using Zod to ensure data integrity and provide clear error messages
  */
 import { z } from 'zod';
 import { DeviceType } from '@prisma/client';
-import { t } from '../utils/i18n';
 
-// Helper để tạo error map với i18n
+// Helper to create error map with direct English messages
 const createErrorMap = (): z.ZodErrorMap => {
   return (issue: z.ZodIssue, ctx: z.ErrorMapCtx) => {
     let message: string;
@@ -14,38 +13,28 @@ const createErrorMap = (): z.ZodErrorMap => {
     switch (issue.code) {
       case z.ZodIssueCode.invalid_type:
         if (issue.received === 'undefined' || issue.received === 'null') {
-          message = t('validation:required', { field: ctx.data });
+          message = `${ctx.data} is required`;
         } else {
-          message = t('validation:invalidType', { 
-            field: ctx.data, 
-            expected: issue.expected, 
-            received: issue.received 
-          });
+          message = `${ctx.data} should be ${issue.expected} but received ${issue.received}`;
         }
         break;
       
       case z.ZodIssueCode.invalid_string:
         if (issue.validation === 'url') {
-          message = t('validation:invalidUrl');
+          message = 'Invalid URL';
         } else if (issue.validation === 'email') {
-          message = t('validation:invalidEmail');
+          message = 'Invalid email';
         } else {
-          message = t('validation:invalidString', { field: ctx.data });
+          message = `${ctx.data} is invalid`;
         }
         break;
         
       case z.ZodIssueCode.too_small:
-        message = t('validation:minLength', { 
-          field: ctx.data, 
-          min: issue.minimum 
-        });
+        message = `${ctx.data} must be at least ${issue.minimum} characters`;
         break;
         
       case z.ZodIssueCode.too_big:
-        message = t('validation:maxLength', { 
-          field: ctx.data, 
-          max: issue.maximum 
-        });
+        message = `${ctx.data} must not exceed ${issue.maximum} characters`;
         break;
         
       default:
@@ -56,31 +45,31 @@ const createErrorMap = (): z.ZodErrorMap => {
   };
 };
 
-// Cấu hình Zod với error map tùy chỉnh
+// Configure Zod with custom error map
 z.setErrorMap(createErrorMap());
 
-// Schema cho URL hợp lệ
+// Schema for valid URL
 export const urlSchema = z.string().url().min(5).max(500);
 
-// Schema cho ID hợp lệ
+// Schema for valid ID
 export const idSchema = z.string().min(1).max(100);
 
-// Schema cho DeviceType
+// Schema for DeviceType
 export const deviceTypeSchema = z.enum([DeviceType.DESKTOP, DeviceType.MOBILE]);
 
-// Schema cho MeasurementRequest
+// Schema for MeasurementRequest
 export const measurementRequestSchema = z.object({
   productId: idSchema.describe('Product ID'),
   deviceType: deviceTypeSchema.optional().describe('Device Type')
 });
 
-// Schema cho DateRange
+// Schema for DateRange
 export const dateRangeSchema = z.object({
   from: z.string().or(z.date()).describe('Start Date'),
   to: z.string().or(z.date()).describe('End Date')
 });
 
-// Schema cho ExportRequest
+// Schema for ExportRequest
 export const exportRequestSchema = z.object({
   productIds: z.array(idSchema).optional().describe('Product IDs'),
   dateFrom: z.string().optional().describe('Start Date'),
@@ -89,7 +78,7 @@ export const exportRequestSchema = z.object({
   format: z.enum(['csv', 'json']).describe('Export Format')
 });
 
-// Schema cho Product
+// Schema for Product
 export const productSchema = z.object({
   name: z.string().min(2).max(100).describe('Product Name'),
   url: urlSchema.describe('Product URL'),
@@ -98,21 +87,20 @@ export const productSchema = z.object({
 });
 
 /**
- * Validate một request body với schema cụ thể
- * @param data - Dữ liệu cần validate
- * @param schema - Schema validation
- * @returns Kết quả validation (success hoặc error)
+ * Validate a request body with a specific schema
+ * @param data - Data to validate
+ * @param schema - Validation schema
+ * @returns Validation result (success or error)
  */
 export function validateRequest<T>(data: unknown, schema: z.ZodType<T>) {
   return schema.safeParse(data);
 }
 
 /**
- * Trích xuất error messages từ kết quả validation
- * @param result - Kết quả validation thất bại
- * @returns Object chứa các error messages
+ * Extract error messages from validation result
+ * @param result - Failed validation result
+ * @returns Object containing error messages
  */
 export function extractValidationErrors(result: z.SafeParseError<any>) {
   return result.error.format();
 }
-
