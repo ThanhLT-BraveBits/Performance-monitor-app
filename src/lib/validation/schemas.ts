@@ -8,7 +8,7 @@ import { t } from '../utils/i18n';
 
 // Helper để tạo error map với i18n
 const createErrorMap = (): z.ZodErrorMap => {
-  return (issue, ctx) => {
+  return (issue: z.ZodIssue, ctx: z.ErrorMapCtx) => {
     let message: string;
 
     switch (issue.code) {
