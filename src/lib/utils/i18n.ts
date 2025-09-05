@@ -57,7 +57,7 @@ const resources = {
   },
   en: {
     [NAMESPACES.COMMON]: {
-      appName: 'Shopify Performance Monitor 1',
+      appName: 'Shopify Performance Monitor',
       dashboard: 'Dashboard',
       settings: 'Settings',
       products: 'Products',
