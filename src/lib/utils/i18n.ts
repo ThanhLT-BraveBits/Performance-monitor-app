@@ -57,7 +57,7 @@ const resources = {
   },
   en: {
     [NAMESPACES.COMMON]: {
-      appName: 'Shopify Performance Monitor',
+      appName: 'Shopify Performance Monitor 1',
       dashboard: 'Dashboard',
       settings: 'Settings',
       products: 'Products',
@@ -111,7 +111,7 @@ i18next.init({
  * @returns Chuỗi đã được dịch
  */
 export function t(key: string, options?: any): string {
-  return i18next.t(key, options);
+  return i18next.t(key, options) as string;
 }
 
 /**
