@@ -1,0 +1,16 @@
+[
+  {
+    "id": "cmejkpn6c004ow3etyfx6vdlm",
+    "key": "last_cron_run",
+    "value": "2025-09-04T07:15:21.937Z",
+    "createdAt": "2025-08-20T06:10:08.917Z",
+    "updatedAt": "2025-09-04T07:15:21.938Z"
+  },
+  {
+    "id": "cmejkpn6f004pw3etc0wocik8",
+    "key": "last_cron_results",
+    "value": "{\"totalProducts\":17,\"successCount\":34,\"failureCount\":0,\"duration\":1386306,\"timestamp\":\"2025-09-04T07:15:21.939Z\",\"jobId\":\"job-1756968735630-xuixg5s\"}",
+    "createdAt": "2025-08-20T06:10:08.920Z",
+    "updatedAt": "2025-09-04T07:15:21.940Z"
+  }
+]

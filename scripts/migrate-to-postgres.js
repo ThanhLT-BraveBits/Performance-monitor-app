@@ -1,17 +1,12 @@
 // migrate-to-postgres.js
 // Script to migrate data from SQLite to PostgreSQL
-const { PrismaClient: SQLitePrismaClient } = require('@prisma/client');
 const fs = require('fs');
 const path = require('path');
 
-// Initialize SQLite client with the current schema
-const sqliteClient = new SQLitePrismaClient({
-  datasources: {
-    db: {
-      url: process.env.SQLITE_DATABASE_URL || 'file:./prisma/dev.db',
-    },
-  },
-});
+// Import SQLite client from the custom output location
+const { PrismaClient: SQLitePrismaClient } = require('../node_modules/.prisma/sqlite-client');
+// Initialize SQLite client
+const sqliteClient = new SQLitePrismaClient();
 
 async function exportSQLiteData() {
   console.log('🔍 Exporting data from SQLite database...');

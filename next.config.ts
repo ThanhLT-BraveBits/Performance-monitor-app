@@ -2,9 +2,11 @@ import { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
+  // Đã loại bỏ swcMinify vì không được hỗ trợ trong Next.js 15
   experimental: {
-    serverActions: true,
+    serverActions: {
+      allowedOrigins: ['localhost:3000', 'localhost:3001'],
+    },
   },
   typescript: {
     // !! WARN !!
