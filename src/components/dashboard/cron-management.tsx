@@ -119,7 +119,7 @@ export function CronManagement() {
         // Refresh status after successful run
         await fetchCronStatus();
         
-        // Không sử dụng alert() nữa mà hiển thị thông báo trong UI
+        // Don't use alert() anymore, show notification in UI
         setSuccessMessage(`Cron job started successfully! Processing ${result.totalProducts || 0} products in the background. The measurements will take several minutes to complete.`);
       } else {
         // Handle specific error responses

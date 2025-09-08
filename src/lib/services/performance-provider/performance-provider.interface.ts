@@ -1,32 +1,32 @@
 /**
- * Interface cho các performance data providers
- * Định nghĩa một contract chung cho tất cả các providers
+ * Interface for performance data providers
+ * Defines a common contract for all providers
  */
 import { DeviceType } from '@prisma/client';
 import { PerformanceMetrics } from '@/lib/types';
 
 /**
- * Interface cho các performance data provider
- * Các providers như Google PageSpeed, Lighthouse, etc. sẽ implement interface này
+ * Interface for performance data providers
+ * Providers like Google PageSpeed, Lighthouse, etc. will implement this interface
  */
 export interface PerformanceProvider {
   /**
-   * Tên của provider
+   * Provider name
    */
   readonly name: string;
   
   /**
-   * Đo lường hiệu suất cho một URL
-   * @param url - URL cần đo lường
-   * @param deviceType - Loại thiết bị (desktop/mobile)
-   * @returns Promise với kết quả đo lường
+   * Measure performance for a URL
+   * @param url - URL to measure
+   * @param deviceType - Device type (desktop/mobile)
+   * @returns Promise with measurement results
    */
   measurePerformance(url: string, deviceType: DeviceType): Promise<PerformanceMetrics>;
   
   /**
-   * Đo lường hiệu suất cho một URL trên cả desktop và mobile
-   * @param url - URL cần đo lường
-   * @returns Promise với kết quả đo lường cho cả desktop và mobile
+   * Measure performance for a URL on both desktop and mobile
+   * @param url - URL to measure
+   * @returns Promise with measurement results for both desktop and mobile
    */
   measureBothDevices(url: string): Promise<{
     desktop: PerformanceMetrics;
@@ -34,14 +34,14 @@ export interface PerformanceProvider {
   }>;
   
   /**
-   * Kiểm tra xem provider có sẵn sàng để sử dụng không
-   * @returns true nếu provider sẵn sàng, false nếu không
+   * Check if provider is ready to use
+   * @returns true if provider is ready, false otherwise
    */
   isAvailable(): boolean;
   
   /**
-   * Lấy thông tin về quota/giới hạn của provider
-   * @returns Thông tin về quota còn lại và thời gian reset
+   * Get information about provider quota/limits
+   * @returns Information about remaining quota and reset time
    */
   getQuotaInfo(): Promise<{
     remainingQuota?: number;
@@ -50,7 +50,7 @@ export interface PerformanceProvider {
 }
 
 /**
- * Enum định nghĩa các loại provider được hỗ trợ
+ * Enum defining supported provider types
  */
 export enum PerformanceProviderType {
   GOOGLE_PAGESPEED = 'google_pagespeed',
@@ -58,21 +58,21 @@ export enum PerformanceProviderType {
 }
 
 /**
- * Factory function để tạo instance của provider dựa trên type
- * @param type - Loại provider cần tạo
- * @returns Instance của provider
+ * Factory function to create provider instance based on type
+ * @param type - Type of provider to create
+ * @returns Provider instance
  */
 export function createPerformanceProvider(type: PerformanceProviderType): PerformanceProvider {
-  // Sẽ được implement trong các file khác
+  // Will be implemented in other files
   throw new Error(`Provider type ${type} is not implemented yet`);
 }
 
 /**
- * Lấy provider mặc định dựa trên cấu hình
- * @returns Provider mặc định
+ * Get default provider based on configuration
+ * @returns Default provider
  */
 export function getDefaultProvider(): PerformanceProvider {
-  // Sẽ được implement trong các file khác
+  // Will be implemented in other files
   throw new Error('Default provider is not implemented yet');
 }
 

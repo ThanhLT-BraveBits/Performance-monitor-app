@@ -1,6 +1,6 @@
 /**
- * Hệ thống logging cấu hình được với các level khác nhau
- * Thay thế cho console.log để có kiểm soát tốt hơn trong production
+ * Configurable logging system with different levels
+ * Replacement for console.log to have better control in production
  */
 
 export enum LogLevel {
@@ -11,13 +11,13 @@ export enum LogLevel {
   NONE = 4
 }
 
-// Cấu hình mặc định: hiển thị tất cả logs trong development, chỉ hiển thị warnings và errors trong production
+// Default configuration: show all logs in development, only warnings and errors in production
 const DEFAULT_LOG_LEVEL = process.env.NODE_ENV === 'production' ? LogLevel.WARN : LogLevel.DEBUG;
 
-// Cho phép override thông qua biến môi trường
+// Allow override through environment variable
 const CURRENT_LOG_LEVEL = Number(process.env.LOG_LEVEL) || DEFAULT_LOG_LEVEL;
 
-// Các màu sắc cho console
+// Colors for console output
 const COLORS = {
   debug: '\x1b[34m', // Blue
   info: '\x1b[32m',  // Green
@@ -27,13 +27,13 @@ const COLORS = {
 };
 
 /**
- * Logger utility với các level khác nhau và định dạng nhất quán
+ * Logger utility with different levels and consistent formatting
  */
 export const logger = {
   /**
-   * Log debug message - chỉ hiển thị trong development hoặc khi được cấu hình
-   * @param message - Thông điệp cần log
-   * @param args - Các tham số bổ sung (objects, errors, etc.)
+   * Log debug message - only shown in development or when configured
+   * @param message - Message to log
+   * @param args - Additional parameters (objects, errors, etc.)
    */
   debug: (message: string, ...args: any[]): void => {
     if (CURRENT_LOG_LEVEL <= LogLevel.DEBUG) {
@@ -43,9 +43,9 @@ export const logger = {
   },
 
   /**
-   * Log thông tin chung - thường được hiển thị trong development và staging
-   * @param message - Thông điệp cần log
-   * @param args - Các tham số bổ sung
+   * Log general information - usually shown in development and staging
+   * @param message - Message to log
+   * @param args - Additional parameters
    */
   info: (message: string, ...args: any[]): void => {
     if (CURRENT_LOG_LEVEL <= LogLevel.INFO) {
@@ -55,9 +55,9 @@ export const logger = {
   },
 
   /**
-   * Log cảnh báo - luôn được hiển thị trừ khi tắt logs hoàn toàn
-   * @param message - Thông điệp cần log
-   * @param args - Các tham số bổ sung
+   * Log warning - always shown unless logs are completely disabled
+   * @param message - Message to log
+   * @param args - Additional parameters
    */
   warn: (message: string, ...args: any[]): void => {
     if (CURRENT_LOG_LEVEL <= LogLevel.WARN) {
@@ -67,9 +67,9 @@ export const logger = {
   },
 
   /**
-   * Log lỗi - luôn được hiển thị trừ khi tắt logs hoàn toàn
-   * @param message - Thông điệp cần log
-   * @param args - Các tham số bổ sung (thường là Error object)
+   * Log error - always shown unless logs are completely disabled
+   * @param message - Message to log
+   * @param args - Additional parameters (usually Error object)
    */
   error: (message: string, ...args: any[]): void => {
     if (CURRENT_LOG_LEVEL <= LogLevel.ERROR) {
@@ -79,9 +79,9 @@ export const logger = {
   },
 
   /**
-   * Tạo một logger với prefix cố định cho module cụ thể
-   * @param module - Tên module
-   * @returns Logger instance với prefix được cấu hình sẵn
+   * Create a logger with fixed prefix for specific module
+   * @param module - Module name
+   * @returns Logger instance with pre-configured prefix
    */
   createModuleLogger: (module: string) => {
     return {
@@ -97,7 +97,7 @@ export const logger = {
   }
 };
 
-// Ví dụ sử dụng:
+// Usage example:
 // const moduleLogger = logger.createModuleLogger('PageSpeedService');
 // moduleLogger.info('Service initialized');
 

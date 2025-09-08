@@ -1,21 +1,21 @@
 /**
- * Entry point cho performance providers
- * Export các providers và factory function
+ * Entry point for performance providers
+ * Export providers and factory function
  */
 import { PerformanceProvider, PerformanceProviderType } from './performance-provider.interface';
 import { GooglePageSpeedProvider } from './google-pagespeed.provider';
 import { logger } from '@/lib/utils/logger';
 
-// Logger cho module này
+// Logger for this module
 const providerLogger = logger.createModuleLogger('PerformanceProviders');
 
 // Singleton instances
 let googlePageSpeedProvider: GooglePageSpeedProvider | null = null;
 
 /**
- * Factory function để tạo instance của provider dựa trên type
- * @param type - Loại provider cần tạo
- * @returns Instance của provider
+ * Factory function to create provider instance based on type
+ * @param type - Type of provider to create
+ * @returns Provider instance
  */
 export function createPerformanceProvider(type: PerformanceProviderType): PerformanceProvider {
   switch (type) {
@@ -25,7 +25,7 @@ export function createPerformanceProvider(type: PerformanceProviderType): Perfor
       }
       return googlePageSpeedProvider;
     
-    // Thêm các providers khác ở đây khi cần
+    // Add other providers here when needed
     
     default:
       providerLogger.error(`Unknown provider type: ${type}`);
@@ -34,11 +34,11 @@ export function createPerformanceProvider(type: PerformanceProviderType): Perfor
 }
 
 /**
- * Lấy provider mặc định dựa trên cấu hình
- * @returns Provider mặc định
+ * Get default provider based on configuration
+ * @returns Default provider
  */
 export function getDefaultProvider(): PerformanceProvider {
-  // Mặc định sử dụng Google PageSpeed
+  // Default to Google PageSpeed
   return createPerformanceProvider(PerformanceProviderType.GOOGLE_PAGESPEED);
 }
 

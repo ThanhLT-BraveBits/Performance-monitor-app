@@ -1,5 +1,5 @@
 /**
- * Implementation của PerformanceProvider sử dụng Google PageSpeed Insights API
+ * Implementation of PerformanceProvider using Google PageSpeed Insights API
  */
 import { DeviceType } from '@prisma/client';
 import { PerformanceProvider } from './performance-provider.interface';
@@ -7,11 +7,11 @@ import { PageSpeedInsightsResponse, PerformanceMetrics } from '@/lib/types';
 import { PAGESPEED_CONFIG } from '@/lib/utils/constants';
 import { logger } from '@/lib/utils/logger';
 
-// Logger cho module này
+// Logger for this module
 const pageSpeedLogger = logger.createModuleLogger('GooglePageSpeedProvider');
 
 /**
- * Provider sử dụng Google PageSpeed Insights API
+ * Provider using Google PageSpeed Insights API
  */
 export class GooglePageSpeedProvider implements PerformanceProvider {
   readonly name = 'Google PageSpeed Insights';
@@ -23,8 +23,8 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   private lastRequestTime: number;
 
   /**
-   * Khởi tạo GooglePageSpeedProvider
-   * @param apiKey - API key cho Google PageSpeed Insights (optional, sẽ lấy từ env nếu không cung cấp)
+   * Initialize GooglePageSpeedProvider
+   * @param apiKey - API key for Google PageSpeed Insights (optional, will get from env if not provided)
    */
   constructor(apiKey?: string) {
     this.apiKey = apiKey || process.env.GOOGLE_PAGESPEED_API_KEY || '';
@@ -39,18 +39,18 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Kiểm tra xem provider có sẵn sàng để sử dụng không
-   * @returns true nếu API key đã được cấu hình, false nếu không
+   * Check if provider is ready to use
+   * @returns true if API key is configured, false otherwise
    */
   isAvailable(): boolean {
     return !!this.apiKey;
   }
 
   /**
-   * Đo lường hiệu suất cho một URL
-   * @param url - URL cần đo lường
-   * @param deviceType - Loại thiết bị (desktop/mobile)
-   * @returns Promise với kết quả đo lường
+   * Measure performance for a URL
+   * @param url - URL to measure
+   * @param deviceType - Device type (desktop/mobile)
+   * @returns Promise with measurement results
    */
   async measurePerformance(
     url: string, 
@@ -97,17 +97,17 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
           throw new Error(`Failed to measure performance after ${this.maxRetries} attempts: ${errorMessage}`);
         }
         
-        // Cải thiện cơ chế backoff cho rate limit errors
+        // Improved backoff mechanism for rate limit errors
         const isRateLimit = errorMessage.includes('Unable to process request') || 
                            errorMessage.includes('rate') || 
                            errorMessage.includes('quota') ||
                            errorMessage.includes('too many requests');
                            
-        // Thời gian chờ tăng dần theo số lần thử lại và dài hơn cho lỗi rate limit
+        // Wait time increases progressively with retry count and longer for rate limit errors
         const baseDelay = isRateLimit ? 30000 : this.rateLimitDelay;
         const delay = baseDelay * Math.pow(2, attempts);
         
-        // Thêm một chút ngẫu nhiên để tránh các request đồng thời
+        // Add some randomness to avoid concurrent requests
         const jitter = Math.floor(Math.random() * 3000);
         const finalDelay = delay + jitter;
         
@@ -120,9 +120,9 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Đo lường hiệu suất cho một URL trên cả desktop và mobile
-   * @param url - URL cần đo lường
-   * @returns Promise với kết quả đo lường cho cả desktop và mobile
+   * Measure performance for a URL on both desktop and mobile
+   * @param url - URL to measure
+   * @returns Promise with measurement results for both desktop and mobile
    */
   async measureBothDevices(url: string): Promise<{
     desktop: PerformanceMetrics;
@@ -141,22 +141,22 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Lấy thông tin về quota/giới hạn của provider
-   * @returns Thông tin về quota còn lại và thời gian reset
+   * Get information about provider quota/limits
+   * @returns Information about remaining quota and reset time
    */
   async getQuotaInfo(): Promise<{
     remainingQuota?: number;
     resetTime?: Date;
   }> {
-    // Google PageSpeed Insights API không cung cấp thông tin về quota
+    // Google PageSpeed Insights API does not provide quota information
     return {};
   }
 
   /**
-   * Gửi request đến Google PageSpeed Insights API
-   * @param url - URL cần đo lường
-   * @param strategy - Chiến lược đo lường (desktop/mobile)
-   * @returns Response từ API
+   * Send request to Google PageSpeed Insights API
+   * @param url - URL to measure
+   * @param strategy - Measurement strategy (desktop/mobile)
+   * @returns Response from API
    */
   private async makeRequest(url: string, strategy: 'desktop' | 'mobile'): Promise<PageSpeedInsightsResponse> {
     const params = new URLSearchParams({
@@ -204,9 +204,9 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Chuyển đổi response từ API thành PerformanceMetrics
-   * @param response - Response từ API
-   * @param deviceType - Loại thiết bị
+   * Convert API response to PerformanceMetrics
+   * @param response - Response from API
+   * @param deviceType - Device type
    * @returns PerformanceMetrics
    */
   private transformResponse(
@@ -251,9 +251,9 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Trích xuất giá trị số từ audit
-   * @param audit - Audit từ API
-   * @returns Giá trị số hoặc null nếu không có
+   * Extract numeric value from audit
+   * @param audit - Audit from API
+   * @returns Numeric value or null if not available
    */
   private getMetricValue(audit: any): number | null {
     if (!audit || audit.numericValue === undefined) {
@@ -278,8 +278,8 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Utility để sleep một khoảng thời gian
-   * @param ms - Thời gian cần sleep (milliseconds)
+   * Utility to sleep for a period of time
+   * @param ms - Time to sleep (milliseconds)
    * @returns Promise
    */
   private sleep(ms: number): Promise<void> {
@@ -287,9 +287,9 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Kiểm tra xem một URL có hợp lệ không
-   * @param url - URL cần kiểm tra
-   * @returns true nếu URL hợp lệ, false nếu không
+   * Check if a URL is valid
+   * @param url - URL to check
+   * @returns true if URL is valid, false otherwise
    */
   static isValidUrl(url: string): boolean {
     try {
@@ -301,9 +301,9 @@ export class GooglePageSpeedProvider implements PerformanceProvider {
   }
 
   /**
-   * Kiểm tra xem một lỗi có phải là lỗi rate limit không
+   * Check if an error is a rate limit error
    * @param error - Error object
-   * @returns true nếu là lỗi rate limit, false nếu không
+   * @returns true if it's a rate limit error, false otherwise
    */
   static isRateLimitError(error: Error): boolean {
     const message = error.message.toLowerCase();

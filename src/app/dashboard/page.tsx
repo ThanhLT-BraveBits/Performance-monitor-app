@@ -9,6 +9,7 @@ import { ProductList } from '@/components/dashboard/product-list';
 import { CoreWebVitals } from '@/components/dashboard/core-web-vitals';
 import { CronManagement } from '@/components/dashboard/cron-management';
 import { ExportDialog } from '@/components/export/export-dialog';
+import { NoSSR } from '@/components/no-ssr';
 
 export default function DashboardPage() {
   return (
@@ -26,9 +27,9 @@ export default function DashboardPage() {
       
       <div className="space-y-4">
         {/* Overview Cards */}
-        <Suspense fallback={<DashboardSkeleton />}>
+        <NoSSR fallback={<DashboardSkeleton />}>
           <DashboardOverview />
-        </Suspense>
+        </NoSSR>
 
         {/* Charts Section */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
@@ -43,9 +44,9 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Suspense fallback={<ChartSkeleton />}>
+              <NoSSR fallback={<ChartSkeleton />}>
                 <PerformanceCharts />
-              </Suspense>
+              </NoSSR>
             </CardContent>
           </Card>
 
@@ -80,14 +81,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Cron Job Management */}
-        <Suspense fallback={<CronSkeleton />}>
+        <NoSSR fallback={<CronSkeleton />}>
           <CronManagement />
-        </Suspense>
+        </NoSSR>
 
         {/* Core Web Vitals Section */}
-        <Suspense fallback={<CoreWebVitalsSkeleton />}>
+        <NoSSR fallback={<CoreWebVitalsSkeleton />}>
           <CoreWebVitals />
-        </Suspense>
+        </NoSSR>
 
         {/* Products List */}
         <Card>
@@ -98,9 +99,9 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Suspense fallback={<TableSkeleton />}>
+            <NoSSR fallback={<TableSkeleton />}>
               <ProductList />
-            </Suspense>
+            </NoSSR>
           </CardContent>
         </Card>
       </div>

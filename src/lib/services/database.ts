@@ -66,36 +66,13 @@ class DatabaseService {
       } catch (primaryError) {
         console.error('❌ Primary database connection failed:', primaryError);
         
-        // If the primary connection fails and it's a SQLite file path, try the alternative path
-        if (process.env.DATABASE_URL?.includes('file:./prisma/dev.db')) {
-          console.log('🔄 Trying alternative database path...');
-          
-          try {
-            // Disconnect the failed client
-            await this.prisma.$disconnect().catch(() => {});
-            
-            // Create a new client with the alternative path
-            this.prisma = new PrismaClient({
-              datasources: {
-                db: {
-                  url: 'file:./prisma/prisma/dev.db'
-                }
-              },
-              log: ['query', 'error', 'warn'],
-            });
-            
-            await this.prisma.$connect();
-            console.log('✅ Connected to alternative database successfully');
-            this.isConnected = true;
-            this.connectionError = null;
-            return;
-          } catch (alternativeError) {
-            console.error('❌ Alternative database connection also failed:', alternativeError);
-            throw alternativeError; // Re-throw to be caught by the outer catch
-          }
-        } else {
-          throw primaryError; // Re-throw to be caught by the outer catch
+        // For PostgreSQL, add retry logic
+        if (process.env.DATABASE_URL?.includes('postgresql://')) {
+          console.log('🔄 PostgreSQL connection failed, this is expected for Neon database sleeping...');
+          console.log('💡 The database will be warmed up by the warmup API call');
         }
+        
+        throw primaryError; // Re-throw to be caught by the outer catch
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
@@ -231,12 +208,12 @@ class DatabaseService {
       let product;
       
       try {
-        // Tìm sản phẩm trong dữ liệu demo
+        // Find product in demo data
         const demoProducts = this.getProductionDemoProducts();
         product = demoProducts.find(p => p.id === data.productId);
         
         if (!product) {
-          // Nếu không tìm thấy, sử dụng sản phẩm đầu tiên làm fallback
+          // If not found, use first product as fallback
           console.warn(`⚠️ Product ID ${data.productId} not found in demo data, using first product as fallback`);
           product = demoProducts[0];
         }
@@ -248,7 +225,7 @@ class DatabaseService {
       // Create a demo measurement object
       const demoMeasurement: PerformanceMeasurement = {
         id: `demo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        productId: product.id, // Sử dụng ID của sản phẩm đã tìm thấy hoặc fallback
+        productId: product.id, // Use ID of found product or fallback
         deviceType: data.deviceType,
         performanceScore: data.performanceScore,
         fcp: data.fcp || null,
@@ -287,16 +264,16 @@ class DatabaseService {
       if (!product) {
         console.warn(`⚠️ Product with ID ${data.productId} not found in database. Attempting to find by URL...`);
         
-        // Thử tìm sản phẩm theo URL từ dữ liệu demo
+        // Try to find product by URL from demo data
         const demoProducts = this.getProductionDemoProducts();
         const matchingProduct = demoProducts.find(p => p.id === data.productId);
         
         if (matchingProduct) {
-          // Nếu tìm thấy trong dữ liệu demo, thử tạo sản phẩm trong database
+          // If found in demo data, try to create product in database
           console.log(`💡 Found matching product in demo data, creating in database: ${matchingProduct.name}`);
           
           try {
-            // Tạo sản phẩm mới trong database dựa trên dữ liệu demo
+            // Create new product in database based on demo data
             const newProduct = await this.prisma.product.create({
               data: {
                 name: matchingProduct.name,
@@ -308,7 +285,7 @@ class DatabaseService {
             
             console.log(`✅ Created missing product in database: ${newProduct.name} (ID: ${newProduct.id})`);
             
-            // Cập nhật productId để sử dụng ID mới
+            // Update productId to use new ID
             data.productId = newProduct.id;
           } catch (createError) {
             console.error(`❌ Failed to create product in database:`, createError);
@@ -601,12 +578,28 @@ class DatabaseService {
   }
 }
 
-// Singleton instance
+// Global singleton instance with development hot-reload support
 let databaseService: DatabaseService | null = null;
+
+// Support hot reload in development
+if (typeof global !== 'undefined' && process.env.NODE_ENV === 'development') {
+  // @ts-ignore - Global variable for development hot reload
+  if (global.__databaseService) {
+    databaseService = global.__databaseService;
+    console.log('♻️ Reusing existing DatabaseService from hot reload');
+  }
+}
 
 export function getDatabaseService(): DatabaseService {
   if (!databaseService) {
+    console.log('🏗️ Creating new DatabaseService singleton instance...');
     databaseService = new DatabaseService();
+    
+    // Store in global for hot reload persistence in development
+    if (typeof global !== 'undefined' && process.env.NODE_ENV === 'development') {
+      // @ts-ignore
+      global.__databaseService = databaseService;
+    }
   }
   return databaseService;
 }

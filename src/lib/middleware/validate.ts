@@ -1,16 +1,16 @@
 /**
- * Middleware để validate request data
- * Sử dụng với Next.js API routes để đảm bảo dữ liệu đầu vào hợp lệ
+ * Middleware to validate request data
+ * Use with Next.js API routes to ensure valid input data
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { extractValidationErrors } from '../validation/schemas';
 
 /**
- * Middleware để validate request body
+ * Middleware to validate request body
  * @param request - NextRequest object
- * @param schema - Zod schema để validate
- * @returns Dữ liệu đã validate hoặc NextResponse với lỗi validation
+ * @param schema - Zod schema for validation
+ * @returns Validated data or NextResponse with validation error
  */
 export async function validateBody<T>(
   request: NextRequest,
@@ -44,22 +44,22 @@ export async function validateBody<T>(
 }
 
 /**
- * Middleware để validate query parameters
- * @param request - NextRequest object
- * @param schema - Zod schema để validate
- * @returns Dữ liệu đã validate hoặc NextResponse với lỗi validation
+ * Middleware to validate query parameters
+ * @param request - NextRequest object  
+ * @param schema - Zod schema for validation
+ * @returns Validated data or NextResponse with validation error
  */
 export function validateQuery<T>(
   request: NextRequest,
   schema: z.ZodType<T>
 ): { data: T } | NextResponse {
   try {
-    // Chuyển đổi URLSearchParams thành plain object
+    // Convert URLSearchParams to plain object
     const searchParams = request.nextUrl.searchParams;
     const queryObject: Record<string, string | string[]> = {};
 
     searchParams.forEach((value, key) => {
-      // Xử lý các array params (param[]=value1&param[]=value2)
+      // Handle array params (param[]=value1&param[]=value2)
       if (key.endsWith('[]')) {
         const arrayKey = key.slice(0, -2);
         if (!queryObject[arrayKey]) {

@@ -1,58 +1,44 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider  = "postgresql"
-  url       = env("POSTGRES_PRISMA_URL") // uses connection pooling
-  directUrl = env("POSTGRES_URL_NON_POOLING") // uses a direct connection
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  url         String   @unique
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
+  id           String                   @id @default(cuid())
+  name         String
+  url          String                   @unique
+  description  String?
+  isActive     Boolean                  @default(true)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
   measurements PerformanceMeasurement[]
 
   @@map("Product")
 }
 
 model PerformanceMeasurement {
-  id              String      @id @default(cuid())
-  productId       String
-  deviceType      DeviceType
-  measurementDate DateTime    @default(now())
-  
-  // Core Web Vitals
+  id               String     @id @default(cuid())
+  productId        String
+  deviceType       DeviceType
+  measurementDate  DateTime   @default(now())
   performanceScore Int
-  fcp             Int?      // First Contentful Paint (ms)
-  lcp             Int?      // Largest Contentful Paint (ms)
-  cls             Float?      // Cumulative Layout Shift
-  fid             Int?      // First Input Delay (ms)
-  ttfb            Int?      // Time to First Byte (ms)
-  
-  // Additional metrics
-  speedIndex      Int?
-  tbt             Int?      // Total Blocking Time (ms)
-  
-  // PageSpeed Insights specific data
-  opportunity     Json?       // Performance opportunities
-  diagnostics     Json?       // Diagnostic information
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  // Relations
-  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fcp              Int?
+  lcp              Int?
+  cls              Float?
+  fid              Int?
+  ttfb             Int?
+  speedIndex       Int?
+  tbt              Int?
+  opportunity      Json?
+  diagnostics      Json?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  product          Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([productId, deviceType, measurementDate])
   @@index([measurementDate])
@@ -60,27 +46,26 @@ model PerformanceMeasurement {
 }
 
 model MeasurementJob {
-  id          String    @id @default(cuid())
-  productId   String
-  deviceType  DeviceType
-  status      JobStatus @default(PENDING)
-  scheduledAt DateTime
-  startedAt   DateTime?
-  completedAt DateTime?
+  id           String     @id @default(cuid())
+  productId    String
+  deviceType   DeviceType
+  status       JobStatus  @default(PENDING)
+  scheduledAt  DateTime
+  startedAt    DateTime?
+  completedAt  DateTime?
   errorMessage String?
-  retryCount  Int       @default(0)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  retryCount   Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([status, scheduledAt])
   @@map("MeasurementJob")
 }
 
 model SystemConfig {
-  id    String @id @default(cuid())
-  key   String @unique
-  value String
-  
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

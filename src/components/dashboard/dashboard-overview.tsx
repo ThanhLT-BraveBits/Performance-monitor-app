@@ -19,34 +19,75 @@ export function DashboardOverview() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetchDashboardStats();
   }, []);
 
+  // Add retry mechanism for failed initial loads
+  useEffect(() => {
+    if (error && retryCount < 3) {
+      const timer = setTimeout(() => {
+        console.log(`🔄 Retrying dashboard data fetch (attempt ${retryCount + 1}/3)`);
+        setRetryCount(prev => prev + 1);
+        fetchDashboardStats();
+      }, 1000 * (retryCount + 1)); // Progressive delay: 1s, 2s, 3s
+
+      return () => clearTimeout(timer);
+    }
+  }, [error, retryCount]);
+
   const fetchDashboardStats = async () => {
     try {
+      console.log('🚀 DashboardOverview: Starting fetch dashboard stats...');
       setLoading(true);
+      setError(null); // Clear previous errors
       
-      // Fetch products and basic stats
-      const [productsResponse, measurementsResponse] = await Promise.all([
-        fetch('/api/products'),
-        fetch('/api/measurements?limit=1000')
-      ]);
-
-      if (!productsResponse.ok || !measurementsResponse.ok) {
-        throw new Error('Failed to fetch dashboard data');
+      // Add a small delay to ensure database is ready on first load
+      if (retryCount === 0) {
+        console.log('⏳ First fetch attempt, adding 100ms delay...');
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
+      
+      // Fetch products and basic stats with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      let productsData, measurementsData;
+      
+      try {
+        const [productsResponse, measurementsResponse] = await Promise.all([
+          fetch('/api/products', { signal: controller.signal }),
+          fetch('/api/measurements?limit=1000', { signal: controller.signal })
+        ]);
 
-      const productsData = await productsResponse.json();
-      const measurementsData = await measurementsResponse.json();
+        clearTimeout(timeoutId);
 
-      if (!productsData.success || !measurementsData.success) {
-        throw new Error('Invalid response from API');
+        if (!productsResponse.ok || !measurementsResponse.ok) {
+          throw new Error(`Failed to fetch dashboard data: ${productsResponse.status}/${measurementsResponse.status}`);
+        }
+
+        productsData = await productsResponse.json();
+        measurementsData = await measurementsResponse.json();
+
+        if (!productsData.success || !measurementsData.success) {
+          throw new Error(`Invalid response from API: products=${productsData.success}, measurements=${measurementsData.success}`);
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
       }
 
       const products = productsData.data;
       const measurements = measurementsData.data;
+
+      console.log('📊 Data received:', {
+        productsCount: products?.length || 0,
+        measurementsCount: measurements?.length || 0,
+        productsSuccess: productsData.success,
+        measurementsSuccess: measurementsData.success
+      });
 
       // Calculate averages
       const desktopMeasurements = measurements.filter((m: any) => m.deviceType === 'DESKTOP');
@@ -65,19 +106,29 @@ export function DashboardOverview() {
         ? new Date(Math.max(...measurements.map((m: any) => new Date(m.measurementDate).getTime())))
         : null;
 
-      setStats({
+      const newStats = {
         totalProducts: products.length,
         activeProducts: products.filter((p: any) => p.isActive).length,
         totalMeasurements: measurements.length,
         averageDesktopScore,
         averageMobileScore,
         lastUpdated
-      });
+      };
 
+      console.log('✅ Setting dashboard stats:', newStats);
+      setStats(newStats);
       setError(null);
+      setRetryCount(0); // Reset retry count on success
     } catch (err) {
       console.error('Error fetching dashboard stats:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
+      
+      // Only set error if we've exhausted retries or it's a non-retryable error
+      if (retryCount >= 2 || (err instanceof Error && err.name === 'AbortError')) {
+        setError(errorMessage);
+      } else {
+        console.log(`Will retry dashboard fetch due to: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }

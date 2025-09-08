@@ -1,10 +1,10 @@
 /**
- * Các hằng số và cấu hình được sử dụng trong toàn bộ ứng dụng
- * Tập trung các giá trị cố định để dễ dàng quản lý và thay đổi
+ * Constants and configurations used throughout the application
+ * Centralize fixed values for easy management and modification
  */
 
 /**
- * Các API endpoints
+ * API endpoints
  */
 export const API_ENDPOINTS = {
   MEASUREMENTS: '/api/measurements',
@@ -16,7 +16,7 @@ export const API_ENDPOINTS = {
 };
 
 /**
- * Các đường dẫn trong ứng dụng
+ * Application routes
  */
 export const APP_ROUTES = {
   HOME: '/',
@@ -27,7 +27,7 @@ export const APP_ROUTES = {
 };
 
 /**
- * Các giá trị cấu hình chung
+ * General configuration values
  */
 export const APP_CONFIG = {
   APP_NAME: 'Shopify Performance Monitor',
@@ -38,24 +38,24 @@ export const APP_CONFIG = {
 };
 
 /**
- * Các giá trị liên quan đến API keys và secrets
- * Lưu ý: Không hardcode các giá trị nhạy cảm ở đây
- * Sử dụng process.env để lấy từ biến môi trường
+ * API keys and secrets related values
+ * Note: Don't hardcode sensitive values here
+ * Use process.env to get from environment variables
  */
 export const API_KEYS = {
-  // Sử dụng biến môi trường cho CRON_SECRET thay vì hardcode
+  // Use environment variable for CRON_SECRET instead of hardcoding
   getCronSecret: () => process.env.CRON_SECRET || '',
   
-  // Tạo token tạm thời cho frontend với thời hạn ngắn
+  // Generate temporary token for frontend with short expiration
   getTemporaryCronToken: async () => {
-    // Trong thực tế, đây sẽ là một API call để lấy token tạm thời
-    // với thời hạn ngắn từ server
+    // In practice, this would be an API call to get temporary token
+    // with short expiration from server
     return process.env.NEXT_PUBLIC_TEMPORARY_CRON_TOKEN || '';
   }
 };
 
 /**
- * Các giá trị liên quan đến cơ sở dữ liệu
+ * Database related values
  */
 export const DATABASE_CONFIG = {
   DEFAULT_PAGE_SIZE: 20,
@@ -65,7 +65,7 @@ export const DATABASE_CONFIG = {
 };
 
 /**
- * Các giá trị liên quan đến PageSpeed API
+ * PageSpeed API related values
  */
 export const PAGESPEED_CONFIG = {
   BASE_URL: 'https://www.googleapis.com/pagespeedonline/v5/runPagespeed',

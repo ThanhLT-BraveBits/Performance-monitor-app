@@ -22,7 +22,7 @@ function verifyCronSecret(request: NextRequest): boolean {
   return token === cronSecret;
 }
 
-// Hàm phân chia sản phẩm thành các batch nhỏ hơn
+// Function to split products into smaller batches
 function chunkArray<T>(array: T[], chunkSize: number): T[][] {
   const result: T[][] = [];
   for (let i = 0; i < array.length; i += chunkSize) {
@@ -31,7 +31,7 @@ function chunkArray<T>(array: T[], chunkSize: number): T[][] {
   return result;
 }
 
-// Hàm xử lý đo lường trong background
+// Function to handle measurements in background
 async function processMeasurements(products: any[], databaseService: any, jobId: string) {
   try {
     console.log(`🕐 [Job ${jobId}] Processing measurements in background...`);
@@ -41,8 +41,8 @@ async function processMeasurements(products: any[], databaseService: any, jobId:
     const results = [];
     const deviceTypes = ['DESKTOP', 'MOBILE'] as DeviceType[];
     
-    // Chia nhỏ danh sách sản phẩm thành các batch để tránh quá nhiều request liên tiếp
-    const BATCH_SIZE = 3; // Mỗi batch chỉ xử lý tối đa 3 sản phẩm
+    // Split product list into batches to avoid too many consecutive requests
+    const BATCH_SIZE = 3; // Each batch processes maximum 3 products
     const productBatches = chunkArray(products, BATCH_SIZE);
     const totalBatches = productBatches.length;
     
@@ -54,9 +54,9 @@ async function processMeasurements(products: any[], databaseService: any, jobId:
       batchIndex++;
       console.log(`📋 [Job ${jobId}] Starting batch ${batchIndex}/${totalBatches} with ${batch.length} products`);
       
-      // Nếu không phải batch đầu tiên, thêm thời gian nghỉ giữa các batch
+      // If not the first batch, add rest time between batches
       if (batchIndex > 1) {
-        const batchDelayMs = 60000; // 60 giây nghỉ giữa các batch
+        const batchDelayMs = 60000; // 60 seconds rest between batches
         console.log(`⏱️ [Job ${jobId}] Waiting ${batchDelayMs/1000}s between batches...`);
         await new Promise(resolve => setTimeout(resolve, batchDelayMs));
       }
@@ -189,15 +189,15 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    // Trả về response ngay lập tức
+    // Return response immediately
     console.log(`🚀 [Job ${jobId}] Starting background processing for ${products.length} products`);
     
-    // Bắt đầu xử lý trong background (không đợi hoàn thành)
+    // Start background processing (don't wait for completion)
     processMeasurements(products, databaseService, jobId).catch(error => {
       console.error(`❌ [Job ${jobId}] Unhandled background error:`, error);
     });
     
-    // Trả về response ngay lập tức
+    // Return response immediately
     return NextResponse.json({
       success: true,
       message: `Started processing ${products.length} products in background`,

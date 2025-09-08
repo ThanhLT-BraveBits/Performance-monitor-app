@@ -1,14 +1,14 @@
 /**
- * Service xử lý authentication và authorization
- * Cung cấp các hàm để tạo và xác thực token
+ * Service for handling authentication and authorization
+ * Provides functions to create and verify tokens
  */
 import { logger } from '../utils/logger';
 
-// Logger cho module này
+// Logger for this module
 const authLogger = logger.createModuleLogger('AuthService');
 
 /**
- * Lớp xử lý authentication và authorization
+ * Class for handling authentication and authorization
  */
 export class AuthService {
   private cronSecret: string;
@@ -22,9 +22,9 @@ export class AuthService {
   }
 
   /**
-   * Xác thực token cho cron job
-   * @param token - Token cần xác thực
-   * @returns true nếu token hợp lệ, false nếu không
+   * Verify token for cron job
+   * @param token - Token to verify
+   * @returns true if token is valid, false otherwise
    */
   verifyCronToken(token: string): boolean {
     if (!this.cronSecret) {
@@ -36,38 +36,38 @@ export class AuthService {
   }
 
   /**
-   * Tạo token tạm thời cho frontend với thời hạn ngắn
-   * @param expiresInSeconds - Thời gian hết hạn tính bằng giây (mặc định 5 phút)
-   * @returns Token tạm thời
+   * Create temporary token for frontend with short expiration
+   * @param expiresInSeconds - Expiration time in seconds (default 5 minutes)
+   * @returns Temporary token
    */
   createTemporaryToken(expiresInSeconds: number = 300): string {
-    // Trong thực tế, bạn nên sử dụng một thư viện như jsonwebtoken
-    // để tạo JWT token với thời hạn
+    // In practice, you should use a library like jsonwebtoken
+    // to create JWT token with expiration
     
-    // Đây là một cách đơn giản để tạo token tạm thời
+    // This is a simple way to create temporary token
     const expiresAt = Date.now() + expiresInSeconds * 1000;
     const payload = {
       exp: expiresAt,
       type: 'temporary',
-      // Thêm các thông tin khác nếu cần
+      // Add other information if needed
     };
     
-    // Trong thực tế, bạn nên ký (sign) payload này với một secret key
+    // In practice, you should sign this payload with a secret key
     const token = Buffer.from(JSON.stringify(payload)).toString('base64');
     
     return token;
   }
 
   /**
-   * Xác thực token tạm thời
-   * @param token - Token cần xác thực
-   * @returns true nếu token hợp lệ và chưa hết hạn, false nếu không
+   * Verify temporary token
+   * @param token - Token to verify
+   * @returns true if token is valid and not expired, false otherwise
    */
   verifyTemporaryToken(token: string): boolean {
     try {
       const payload = JSON.parse(Buffer.from(token, 'base64').toString());
       
-      // Kiểm tra thời hạn
+      // Check expiration
       if (payload.exp && payload.exp > Date.now()) {
         return true;
       }
@@ -85,7 +85,7 @@ export class AuthService {
 let authService: AuthService | null = null;
 
 /**
- * Lấy instance của AuthService
+ * Get AuthService instance
  * @returns AuthService instance
  */
 export function getAuthService(): AuthService {

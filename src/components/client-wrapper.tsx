@@ -42,8 +42,31 @@ export function ClientWrapper({ children }: { children: React.ReactNode }) {
       attributeFilter: ['class']
     });
 
-    // Cleanup observer on unmount
-    return () => observer.disconnect();
+    // Warm up database connection on app start
+    const warmupDatabase = async () => {
+      try {
+        console.log('🔥 Warming up database from client...');
+        const response = await fetch('/api/warmup');
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log('✅ Database warmup completed from client');
+        } else {
+          console.warn('⚠️ Database warmup failed from client:', result.error);
+        }
+      } catch (error) {
+        console.warn('⚠️ Database warmup request failed:', error);
+      }
+    };
+
+    // Warm up database after a short delay to avoid blocking initial render
+    const warmupTimer = setTimeout(warmupDatabase, 500);
+
+    // Cleanup observer and timer on unmount
+    return () => {
+      observer.disconnect();
+      clearTimeout(warmupTimer);
+    };
   }, []);
 
   return <>{children}</>;

@@ -65,19 +65,19 @@ export class PageSpeedService {
           throw new Error(`Failed to measure performance after ${this.maxRetries} attempts: ${errorMessage}`);
         }
         
-        // Cải thiện cơ chế backoff cho rate limit errors
+        // Improved backoff mechanism for rate limit errors
         const isRateLimit = errorMessage.includes('Unable to process request') || 
                            errorMessage.includes('rate') || 
                            errorMessage.includes('quota') ||
                            errorMessage.includes('too many requests');
                            
-        // Thời gian chờ tăng dần theo số lần thử lại và dài hơn cho lỗi rate limit
-        // Với rate limit: 30s -> 60s -> 120s
-        // Với lỗi khác: 10s -> 20s -> 40s
+        // Wait time increases progressively with retry count and longer for rate limit errors
+        // With rate limit: 30s -> 60s -> 120s
+        // With other errors: 10s -> 20s -> 40s
         const baseDelay = isRateLimit ? 30000 : this.rateLimitDelay;
         const delay = baseDelay * Math.pow(2, attempts);
         
-        // Thêm một chút ngẫu nhiên để tránh các request đồng thời
+        // Add some randomness to avoid concurrent requests
         const jitter = Math.floor(Math.random() * 3000);
         const finalDelay = delay + jitter;
         

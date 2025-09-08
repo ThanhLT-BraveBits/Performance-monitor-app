@@ -1,24 +1,24 @@
 /**
- * API endpoint để lấy token tạm thời cho cron job
- * Được sử dụng bởi frontend để lấy token cho các thao tác thủ công
+ * API endpoint to get temporary token for cron job
+ * Used by frontend to get token for manual operations
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthService } from '@/lib/services/auth';
 import { logger } from '@/lib/utils/logger';
 
-// Logger cho endpoint này
+// Logger for this endpoint
 const apiLogger = logger.createModuleLogger('API:CronToken');
 
 /**
- * GET endpoint để lấy token tạm thời
- * Token này chỉ có hiệu lực trong thời gian ngắn (5 phút)
+ * GET endpoint to get temporary token
+ * This token is only valid for a short time (5 minutes)
  */
 export async function GET(request: NextRequest) {
   try {
-    // Trong thực tế, bạn nên thêm xác thực người dùng ở đây
-    // để đảm bảo chỉ người dùng đã đăng nhập mới có thể lấy token
+    // In practice, you should add user authentication here
+    // to ensure only logged-in users can get token
     
-    // Tạo token tạm thời
+    // Create temporary token
     const authService = getAuthService();
     const token = authService.createTemporaryToken();
     
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       token,
-      expiresIn: 300 // 5 phút
+      expiresIn: 300 // 5 minutes
     });
   } catch (error) {
     apiLogger.error('Error creating temporary token', error);
