@@ -48,11 +48,25 @@ export function DashboardOverview() {
       if (retryCount === 0) {
         console.log('⏳ First fetch attempt, adding 100ms delay...');
         await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Try to warm up database first
+        try {
+          console.log('🔥 Warming up database...');
+          await fetch('/api/warmup', { 
+            method: 'GET',
+            signal: AbortSignal.timeout(5000) // 5s timeout for warmup
+          });
+        } catch (warmupError) {
+          console.warn('Warmup failed, continuing with main fetch:', warmupError);
+        }
       }
       
       // Fetch products and basic stats with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => {
+        console.warn('⚠️ Dashboard fetch timeout after 15 seconds, aborting...');
+        controller.abort();
+      }, 15000); // 15s timeout for Neon cold start
       
       let productsData, measurementsData;
       
@@ -74,8 +88,14 @@ export function DashboardOverview() {
         if (!productsData.success || !measurementsData.success) {
           throw new Error(`Invalid response from API: products=${productsData.success}, measurements=${measurementsData.success}`);
         }
-      } catch (fetchError) {
+      } catch (fetchError: any) {
         clearTimeout(timeoutId);
+        
+        // Handle AbortError specifically
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timed out after 15 seconds - database may be sleeping');
+        }
+        
         throw fetchError;
       }
 
@@ -123,9 +143,15 @@ export function DashboardOverview() {
       console.error('Error fetching dashboard stats:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to load dashboard data';
       
+      // Check if it's a timeout error
+      const isTimeoutError = errorMessage.includes('timed out') || errorMessage.includes('timeout');
+      
       // Only set error if we've exhausted retries or it's a non-retryable error
-      if (retryCount >= 2 || (err instanceof Error && err.name === 'AbortError')) {
-        setError(errorMessage);
+      if (retryCount >= 2 || isTimeoutError) {
+        setError(isTimeoutError ? 
+          'Database connection timed out. Please try refreshing the page.' : 
+          errorMessage
+        );
       } else {
         console.log(`Will retry dashboard fetch due to: ${errorMessage}`);
       }

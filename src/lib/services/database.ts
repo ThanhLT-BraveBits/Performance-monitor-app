@@ -1,5 +1,4 @@
 import { PrismaClient, DeviceType, JobStatus, Prisma } from '@prisma/client';
-// import { withAccelerate } from '@prisma/extension-accelerate'; // Not needed for SQLite
 import { 
   Product, 
   PerformanceMeasurement, 
@@ -10,31 +9,50 @@ import {
 } from '../types';
 
 class DatabaseService {
-  private prisma: any; // Use any type to handle extended Prisma client
+  private prisma: any;
   private isConnected = false;
   private connectionError: string | null = null;
+  private connectionPromise: Promise<void> | null = null;
 
   constructor() {
     try {
+      console.log('🏗️ Creating new DatabaseService singleton instance...');
       console.log('🔍 DATABASE_URL check:', {
         exists: !!process.env.DATABASE_URL,
         value: process.env.DATABASE_URL ? 'SET' : 'NOT_SET',
         isFile: process.env.DATABASE_URL?.includes('file:') || false
       });
+
+      // Store in global for hot reload persistence in development
+      if (process.env.NODE_ENV === 'development') {
+        // @ts-ignore
+        (global as any).__databaseService = this;
+      }
       
-      // Initialize Prisma client for both PostgreSQL and SQLite
       if (process.env.DATABASE_URL) {
         console.log('🔌 Initializing Prisma client...');
         this.prisma = new PrismaClient({
-          log: ['query', 'error', 'warn'],
+          log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+          datasources: {
+            db: {
+              url: process.env.DATABASE_URL
+            }
+          },
+          errorFormat: 'pretty'
         });
-        
-        // Test connection immediately
-        this.testConnection();
+
+        // Graceful disconnect on process exit
+        process.on('beforeExit', async () => {
+          console.log('🔌 Gracefully disconnecting Prisma on process exit...');
+          await this.prisma?.$disconnect();
+        });
+
+        // Start connection asynchronously
+        this.connectionPromise = this.testConnection();
       } else {
-        console.log('⚠️ No DATABASE_URL found, using demo mode');
+        console.log('🎭 No DATABASE_URL found, using demo mode');
         this.isConnected = false;
-        this.connectionError = 'No DATABASE_URL configured';
+        this.connectionError = 'No DATABASE_URL configured - using demo data';
         this.prisma = null;
       }
     } catch (error) {
@@ -48,46 +66,95 @@ class DatabaseService {
 
   private async testConnection() {
     try {
-      // Only test connection if we have a DATABASE_URL
       if (!process.env.DATABASE_URL) {
-        console.log('⚠️ No DATABASE_URL found, using demo mode');
+        console.log('🎭 No DATABASE_URL found, using demo mode');
         this.isConnected = false;
-        this.connectionError = 'No DATABASE_URL configured';
+        this.connectionError = 'No DATABASE_URL configured - using demo data';
         return;
       }
 
-      // Try connecting to the database
-      try {
-        await this.prisma.$connect();
-        console.log('✅ Database connected successfully');
-        this.isConnected = true;
-        this.connectionError = null;
-        return;
-      } catch (primaryError) {
-        console.error('❌ Primary database connection failed:', primaryError);
-        
-        // For PostgreSQL, add retry logic
-        if (process.env.DATABASE_URL?.includes('postgresql://')) {
-          console.log('🔄 PostgreSQL connection failed, this is expected for Neon database sleeping...');
-          console.log('💡 The database will be warmed up by the warmup API call');
-        }
-        
-        throw primaryError; // Re-throw to be caught by the outer catch
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown database error';
-      console.error('❌ All database connection attempts failed:', errorMessage);
-      this.isConnected = false;
-      this.connectionError = errorMessage;
+      console.log('🔗 Testing PostgreSQL database connection...');
       
-      // Fall back to demo mode
-      console.log('🎭 Falling back to demo mode due to connection failures');
+      const maxRetries = 3;
+      let retryCount = 0;
+      
+      while (retryCount < maxRetries) {
+        try {
+          if (retryCount > 0) {
+            const delay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 2s, 4s, 8s
+            console.log(`⏳ Retry attempt ${retryCount}/${maxRetries} after ${delay}ms delay...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+
+          // Ensure clean connection
+          await this.prisma.$disconnect().catch(() => {});
+
+          // Set connection timeout
+          const connectionTimeout = setTimeout(() => {
+            throw new Error('PostgreSQL connection timeout after 15 seconds');
+          }, 15000);
+
+          await this.prisma.$connect();
+          clearTimeout(connectionTimeout);
+
+          // Test with a simple query
+          await this.prisma.$queryRaw`SELECT 1 as test, NOW() as timestamp`;
+          
+          console.log('✅ PostgreSQL database connected successfully');
+          this.isConnected = true;
+          this.connectionError = null;
+          return;
+          
+        } catch (retryError: any) {
+          retryCount++;
+          console.warn(`❌ Connection attempt ${retryCount} failed:`, retryError.message);
+          
+          if (retryCount >= maxRetries) {
+            throw retryError;
+          }
+        }
+      }
+    } catch (connectionError: any) {
+      const errorMessage = connectionError instanceof Error ? connectionError.message : 'Unknown database error';
+      
+      let enhancedError = `PostgreSQL connection failed: ${errorMessage}`;
+      
+      // Add specific error context
+      if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        enhancedError += ' (Database may be sleeping - this is normal for serverless databases)';
+      } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('ECONNREFUSED')) {
+        enhancedError += ' (Check DATABASE_URL and network connectivity)';
+      } else if (errorMessage.includes('authentication') || errorMessage.includes('password')) {
+        enhancedError += ' (Check database credentials)';
+      } else if (errorMessage.includes('Response from the Engine was empty')) {
+        enhancedError += ' (Prisma engine connection issue - database may be cold starting)';
+      }
+
+      console.error('❌ Final database connection failure:', enhancedError);
+      this.isConnected = false;
+      this.connectionError = enhancedError;
+      
+      throw new Error(enhancedError);
+    }
+  }
+
+  private async ensureConnection(): Promise<void> {
+    if (this.connectionPromise) {
+      console.log('⏳ Waiting for existing connection promise...');
+      await this.connectionPromise;
+      this.connectionPromise = null;
+    }
+    
+    if (!this.isConnected && this.prisma) {
+      console.log('🔄 Connection not active, attempting to reconnect...');
+      this.connectionPromise = this.testConnection();
+      await this.connectionPromise;
+      this.connectionPromise = null;
     }
   }
 
   private throwIfNotConnected() {
     if (!this.isConnected) {
-      // In production, provide helpful error with fallback suggestions
       if (process.env.NODE_ENV === 'production') {
         throw new Error(`Production database not configured. Please set up DATABASE_URL environment variable with PostgreSQL connection string. Current error: ${this.connectionError}`);
       }
@@ -126,16 +193,23 @@ class DatabaseService {
 
   // Product operations - with production demo fallback
   async getProducts(): Promise<Product[]> {
-    if (!this.isConnected || !this.prisma) {
-      console.log('🎭 Using demo data (database not available)');
+    try {
+      await this.ensureConnection();
+      
+      if (!this.isConnected || !this.prisma) {
+        console.log('🎭 Using demo data (database not available)');
+        return this.getProductionDemoProducts();
+      }
+      
+      const products = await this.prisma.product.findMany({
+        orderBy: { name: 'asc' }
+      });
+      console.log('✅ Retrieved', products.length, 'products from database');
+      return products;
+    } catch (error) {
+      console.warn('⚠️ getProducts failed, falling back to demo data:', error);
       return this.getProductionDemoProducts();
     }
-    
-    const products = await this.prisma.product.findMany({
-      orderBy: { name: 'asc' }
-    });
-    console.log('✅ Retrieved', products.length, 'products from database');
-    return products;
   }
 
   async getActiveProducts(): Promise<Product[]> {
@@ -384,14 +458,63 @@ class DatabaseService {
   // Additional database operations
 
   async healthCheck(): Promise<boolean> {
-    if (!this.isConnected) {
+    try {
+      // Ensure connection is established
+      await this.ensureConnection();
+      
+      if (!this.isConnected || !this.prisma) {
+        console.warn('⚠️ Health check failed: Database not connected');
+        return false;
+      }
+
+      // Test with a simple query with timeout
+      const healthCheckPromise = this.prisma.$queryRaw`SELECT 1 as health_check, NOW() as timestamp`;
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Health check timeout after 10 seconds')), 10000);
+      });
+
+      await Promise.race([healthCheckPromise, timeoutPromise]);
+      console.log('✅ Database health check passed');
+      return true;
+      
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('Response from the Engine was empty')) {
+        console.warn('⚠️ Health check failed: Prisma engine connection issue (database may be cold starting)');
+      } else if (errorMessage.includes('timeout')) {
+        console.warn('⚠️ Health check failed: Database query timeout');
+      } else {
+        console.warn('⚠️ Health check failed:', errorMessage);
+      }
+      
+      // Mark as disconnected if health check fails
+      this.isConnected = false;
+      this.connectionError = errorMessage;
+      
       return false;
     }
+  }
+
+  async reconnect(): Promise<boolean> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return true;
+      console.log('🔄 Attempting to reconnect to database...');
+      
+      if (this.prisma) {
+        await this.prisma.$disconnect().catch(() => {});
+      }
+      
+      this.isConnected = false;
+      this.connectionError = null;
+      this.connectionPromise = this.testConnection();
+      await this.connectionPromise;
+      this.connectionPromise = null;
+      
+      return this.isConnected;
     } catch (error) {
-      console.error('Health check failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('❌ Reconnection failed:', errorMessage);
+      this.connectionError = errorMessage;
       return false;
     }
   }
@@ -408,36 +531,6 @@ class DatabaseService {
       isConnected: this.isConnected,
       error: this.connectionError
     };
-  }
-  
-  // Add method to attempt reconnection
-  async reconnect(): Promise<boolean> {
-    console.log('🔄 Attempting database reconnection...');
-    
-    // Disconnect if already connected
-    if (this.prisma) {
-      try {
-        await this.prisma.$disconnect().catch(() => {});
-      } catch (e) {
-        console.log('Warning during disconnect:', e);
-      }
-    }
-    
-    // Reinitialize the client
-    try {
-      console.log('🔌 Reinitializing Prisma client...');
-      this.prisma = new PrismaClient({
-        log: ['query', 'error', 'warn'],
-      });
-      
-      // Test the connection
-      await this.testConnection();
-      
-      return this.isConnected;
-    } catch (error) {
-      console.error('❌ Reconnection failed:', error);
-      return false;
-    }
   }
 
   async updateProduct(id: string, data: any): Promise<Product> {
@@ -584,21 +677,19 @@ let databaseService: DatabaseService | null = null;
 // Support hot reload in development
 if (typeof global !== 'undefined' && process.env.NODE_ENV === 'development') {
   // @ts-ignore - Global variable for development hot reload
-  if (global.__databaseService) {
-    databaseService = global.__databaseService;
+  if ((global as any).__databaseService) {
+    databaseService = (global as any).__databaseService;
     console.log('♻️ Reusing existing DatabaseService from hot reload');
   }
 }
 
 export function getDatabaseService(): DatabaseService {
   if (!databaseService) {
-    console.log('🏗️ Creating new DatabaseService singleton instance...');
     databaseService = new DatabaseService();
     
     // Store in global for hot reload persistence in development
     if (typeof global !== 'undefined' && process.env.NODE_ENV === 'development') {
-      // @ts-ignore
-      global.__databaseService = databaseService;
+      (global as any).__databaseService = databaseService;
     }
   }
   return databaseService;
